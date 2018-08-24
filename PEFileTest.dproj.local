@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<Transactions>
+    <Transaction>2018/08/05 02:01:38.000.971,T:\PlataformDsv\src\trunk\compilador\Portable Executable File\Unit28.dfm=a:\Documents\Embarcadero\Studio\Projects\Unit28.dfm</Transaction>
+    <Transaction>2018/08/05 02:01:40.000.645,T:\PlataformDsv\src\trunk\compilador\Portable Executable File\Project27.dproj=a:\Documents\Embarcadero\Studio\Projects\Project27.dproj</Transaction>
+    <Transaction>2018/08/10 04:09:38.000.984,T:\PlataformDsv\src\trunk\compilador\Portable Executable File\aSe7e.PEFile.API.pas=T:\PlataformDsv\src\trunk\compilador\Portable Executable File\Se7e.PEFile.API.pas</Transaction>
+    <Transaction>2018/08/10 04:09:54.000.375,T:\PlataformDsv\src\trunk\compilador\Portable Executable File\aSe7e.PEFile.pas=T:\PlataformDsv\src\trunk\compilador\Portable Executable File\Se7e.PEFile.pas</Transaction>
+    <Transaction>2018/08/12 08:34:36.000.868,T:\PlataformDsv\src\trunk\Portable Executable File\Project27.dproj=T:\PlataformDsv\src\trunk\Portable Executable File\PEFile.dproj</Transaction>
+    <Transaction>2018/08/12 08:34:49.000.468,T:\PlataformDsv\src\trunk\Portable Executable File\PEFile.dproj=T:\PlataformDsv\src\trunk\Portable Executable File\PEFileTest.dproj</Transaction>
+  </Transactions>
+</BorlandProject>

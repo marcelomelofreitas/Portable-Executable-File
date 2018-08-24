@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{95CD9078-AC3C-4889-8ADD-6DB671A63B00}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="PEFileTest.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="ModeloDelphi.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="PEFileTest">
+        <MSBuild Projects="PEFileTest.dproj"/>
+    </Target>
+    <Target Name="PEFileTest:Clean">
+        <MSBuild Projects="PEFileTest.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="PEFileTest:Make">
+        <MSBuild Projects="PEFileTest.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ModeloDelphi">
+        <MSBuild Projects="ModeloDelphi.dproj"/>
+    </Target>
+    <Target Name="ModeloDelphi:Clean">
+        <MSBuild Projects="ModeloDelphi.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ModeloDelphi:Make">
+        <MSBuild Projects="ModeloDelphi.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="PEFileTest;ModeloDelphi"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="PEFileTest:Clean;ModeloDelphi:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="PEFileTest:Make;ModeloDelphi:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

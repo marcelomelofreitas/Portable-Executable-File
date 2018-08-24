@@ -1,0 +1,593 @@
+ï»¿INF: formato de cabeçalho de arquivo executável [P_WinSDK]
+
+3,00
+JANELAS 
+PSSONLY | Notas sobre Desenvolvedores do Windows 3 softlib ENDUSER
+
+Resumo:
+
+Nota: Este artigo faz parte de um conjunto de sete artigos, coletivamente
+chamado de "Windows 3.00 Developer's Notes". Mais informaçoes sobre
+o conteúdo dos outros artigos e os procedimentos para encomendar um
+conjunto de cópias impressas, pode ser encontrado no artigo da base de conhecimento intitulado "INF:
+Notas do desenvolvedor do Windows 3.00 "(Q65260).
+
+Este artigo pode ser encontrado na Biblioteca de Software / Dados, pesquisando
+a palavra EXEFMT ou S12688. EXEFMT foi arquivado usando o PKware
+Utilitário de compactaçao de arquivos.
+
+Mais Informaçoes:
+
+Microsoft definiu o formato de arquivo executável segmentado para o Windows
+aplicativos e bibliotecas de vínculo dinâmico (DLLs). Este formato de arquivo é
+também conhecido como o novo formato executável. Este novo formato é um
+extensao do formato exe do MS-DOS existente (formato antigo). o
+A finalidade do formato executável segmentado é fornecer
+informaçoes necessárias para apoiar a vinculaçao dinâmica e segmentaçao
+capacidades do ambiente Windows.
+
+Um arquivo executável contém código e dados do Microsoft Windows ou
+Código, dados e recursos do Windows. Campos específicos foram adicionados a
+o antigo cabeçalho do formato .EXE para indicar a existencia do
+formato de arquivo segmentado. O cabeçalho de estilo antigo pode conter um
+programa executável, chamado programa stub, que será executado se
+o programa é executado no MS-DOS (sem o Windows). Este programa stub
+geralmente imprime uma mensagem indicando que o Microsoft Windows é necessário
+para executar o programa. As extensoes de formato executável segmentado também
+comece com um cabeçalho que descreva o conteúdo e a localizaçao do
+imagem executável no arquivo. O carregador usa essa informaçao de cabeçalho
+quando carrega os segmentos executáveis ??na memória.
+
+
+================================================== ====================
+                     EXTENSOES DE CABEÇALHO DE ESTILO VELHO
+================================================== ====================
+
+O cabeçalho de estilo antigo contém informaçoes que o carregador espera para um DOS
+arquivo executável. Descreve um programa stub (WINSTUB) que o carregador pode
+lugar na memória quando necessário, ele aponta para o novo cabeçalho de estilo e
+contém a tabela de realocaçao de programas stub.
+
+O que se segue ilustra as partes distintas do estilo antigo
+formato executável:
+
+        + ------------------------- +
+    00h | Informaçoes de cabeçalho de estilo antigo |
+        + ------------------------- +
+    20h | Reservado |
+        + ------------------------- +
+    3Ch | Deslocamento para segmentado |
+        | .EXE cabeçalho |
+        + ------------------------- +
+    40h | Tabela de realocaçao e |
+        | Programa de stub do DOS |
+        + ------------------------- +
+        | Cabeçalho .exe segmentado |
+        | . |
+        | . |
+        | . |
+
+A palavra no deslocamento 18h no cabeçalho .exe estilo antigo contém o
+deslocamento de byte relativo para a tabela de realocaçao do programa stub. Se este
+offset é 40h, entao a palavra dupla no offset 3Ch é assumida como sendo a
+deslocamento de byte relativo do começo do arquivo ao início
+do cabeçalho executável segmentado. Um arquivo .exe de novo formato é
+identificado se o cabeçalho executável segmentado contém um
+assinatura. Se a assinatura nao for válida, o arquivo será considerado um
+arquivo .exe de formato antigo. O restante do formato antigo
+cabeçalho irá descrever um programa DOS, o stub. O esboço pode ser qualquer
+programa válido, mas normalmente será um programa que exibe um erro
+mensagem.
+
+================================================== ====================
+                         FORMATO EXE SEGMENTADO
+================================================== ====================
+
+Porque os arquivos executáveis ??do Windows sao geralmente maiores que um segmento
+(64K), informaçoes adicionais (que nao aparecem no estilo antigo
+cabeçalho) é necessário para que o carregador possa carregar cada segmento adequadamente.
+O formato EXE segmentado foi desenvolvido para fornecer ao carregador
+em formaçao.
+
+O arquivo .exe segmentado tem o seguinte formato:
+
+        + ----------------- +
+    00h | EXE antigo |
+        | Cabeçalho |
+        + ----------------- +
+    20h | Reservado |
+        + ----------------- +
+    3Ch | Deslocado para | --- +
+        | Cabeçalho Segmentado | |
+        + ----------------- + |
+    40h | Tabela de Relocaçao | |
+        | Programa & Stub | |
+        + ----------------- + |
+        | | |
+        + ----------------- + |
+    xxh | EXE segmentado | <- +
+        | Cabeçalho |
+        + ----------------- +
+        | Tabela de Segmentos |
+        + ----------------- +
+        | Tabela de Recursos |
+        + ----------------- +
+        | Nome Residente |
+        | Tabela |
+        + ----------------- +
+        | Referencia do módulo |
+        | Tabela |
+        + ----------------- +
+        | Nomes Importados |
+        | Tabela |
+        + ----------------- +
+        | Tabela de entrada |
+        + ----------------- +
+        | Nao-residente |
+        | Tabela de nomes |
+        + ----------------- +
+        | Dados Seg # 1 |
+        | Seg # 1 Info |
+        + ----------------- +
+                .
+                .
+                .
+        + ----------------- +
+        | Dados Seg #n |
+        | Seg #n Info |
+        + ----------------- +
+
+
+As seçoes a seguir descrevem cada um dos componentes que compoem
+o formato EXE segmentado. Cada seçao contém uma descriçao do
+componente e os campos nas estruturas que compoem que
+componente.
+
+Nota: Todos os campos e flag bits nao utilizados sao reservados para uso futuro e
+deve conter 0 (zero) valores.
+
+================================================== ====================
+                         SUPORTE EXE SEGMENTADO
+================================================== ====================
+
+O cabeçalho EXE segmentado contém informaçoes gerais sobre o EXE
+arquivo e contém informaçoes sobre a localizaçao e tamanho da outra
+Seçoes. O carregador do Windows copia esta seçao, junto com outros
+dados, na tabela de módulos nos dados do sistema. A tabela de módulos é
+dados internos usados ??pelo carregador para gerenciar o executável carregado
+módulos no sistema e para suportar links dinâmicos.
+
+O seguinte descreve o formato do cabeçalho executável segmentado.
+Para cada campo, o deslocamento é dado em relaçao ao início do
+cabeçalho segmentado, o tamanho do campo é definido e uma descriçao
+é dada.
+
+    Descriçao do tamanho do deslocamento
+    ---------- -----------
+
+    00h Palavra de assinatura DW.
+                "N" é um byte de baixa ordem.
+                "E" é um byte de alta ordem.
+
+    02h DB Número da versao do linker.
+
+    03h DB Número de revisao do linker.
+
+    04h Desvio do arquivo de tabela de entrada DW, relativo ao início de
+                o cabeçalho de EXE segmentado.
+    06h DW Número de bytes na tabela de entrada.
+
+    08h DD CRC de 32 bits de todo o conteúdo do arquivo.
+                Essas palavras sao consideradas como 00 durante o cálculo.
+
+    0Ch DW Flag word.
+                0000h = NOAUTODATA
+                0001h = SINGLEDATA (segmento de dados automático compartilhado)
+                0002h = MULTIPLEDATA (dados automáticos instanciados
+                        segmento)
+                2000h = Erros detectados no momento do link, o módulo nao
+                        carga.
+                8000h = módulo de biblioteca.
+                        A informaçao SS: SP é inválida, CS: pontos IP
+                        para um procedimento de inicializaçao que é chamado
+                        com AX igual ao manipulador do módulo. este
+                        procedimento de inicializaçao deve executar um
+                        retornar ao chamador, com AX diferente de
+                        zero para indicar sucesso ou AX igual a zero
+                        para indicar falha na inicializaçao. DS está definido
+                        para o segmento de dados da biblioteca se o
+                        O flag SINGLEDATA está definido. Caso contrário, o DS está definido
+                        para o segmento de dados do chamador.
+
+                        Um programa ou DLL só pode conter dinâmica
+                        links para arquivos executáveis ??que tem este
+                        conjunto de sinalizadores de módulo de biblioteca. Um programa nao pode
+                        link dinâmico para outro programa.
+
+    0Eh DW Número de segmento do segmento de dados automático.
+                Este valor é definido como zero se SINGLEDATA e
+                Os bits de flag MULTIPLEDATA sao claros, NOAUTODATA é
+                indicado na palavra bandeiras.
+
+                Um número de segmento é um índice no segmento do módulo
+                mesa. A primeira entrada na tabela de segmentos é segmento
+                número 1.
+
+    10h DW Tamanho inicial, em bytes, do heap dinâmico adicionado ao
+                segmento de dados. Este valor é zero se nenhum local inicial
+                heap é alocado.
+
+    12h DW Tamanho inicial, em bytes, da pilha adicionada aos dados
+                segmento. Este valor é zero para indicar que nao há
+                alocaçao de pilha, ou quando SS nao é igual ao DS.
+
+    14h DD Segmento: offset do CS: IP.
+
+    18h DD Número de segmento: deslocamento de SS: SP.
+                Se SS for igual ao segmento de dados automático e SP for igual a
+                zero, o ponteiro da pilha é colocado no topo da
+                Segmento de dados automático logo abaixo do heap adicional
+                área.
+
+                    + -------------------------- +
+                    | heap dinâmico adicional |
+                    + -------------------------- + <- SP
+                    | pilha adicional |
+                    + -------------------------- +
+                    | segmento de dados automático carregado |
+                    + -------------------------- + <- DS, SS
+
+    1Ch DW Número de entradas na tabela de segmentos.
+
+    1Eh DW Número de entradas na Tabela de referencia do módulo.
+    20h DW Número de bytes na tabela de nomes nao residentes.
+
+    22h Deslocamento do arquivo da tabela de segmentos DW, relativo ao início
+                do cabeçalho de EXE segmentado.
+
+    24h DW Offset do arquivo de tabela de recursos, relativo ao início
+                do cabeçalho de EXE segmentado.
+
+    26h Desvio do arquivo da tabela de nomes residentes DW, relativo a
+                início do cabeçalho de EXE segmentado.
+
+    Deslocamento do arquivo Tabela de referencia do módulo DW de 28 h, relativo a
+                início do cabeçalho de EXE segmentado.
+
+    Deslocamento do arquivo da tabela de nomes importados 2Ah DW, relativo a
+                início do cabeçalho de EXE segmentado.
+
+    2Ch DD Non-Resident Name Deslocamento da tabela, relativo ao
+                início do arquivo.
+
+    30h DW Número de entradas móveis na tabela de entrada.
+
+    32h DW Contagem de deslocamento de alinhamento do setor lógico, log (base 2) de
+                o tamanho do setor do segmento (padrao 9).
+
+    34h DW Número de entradas de recursos.
+
+    36h Tipo de executável do banco de dados, usado pelo carregador.
+                  02h = JANELAS
+
+    37h-3Fh DB Reservado, atualmente 0's.
+
+
+================================================== ====================
+                            TABELA DE SEGMENTO
+================================================== ====================
+
+A tabela de segmentos contém uma entrada para cada segmento no executável
+Arquivo. O número de entradas da tabela de segmentos é definido no segmento segmentado
+Cabeçalho EXE. A primeira entrada na tabela de segmentos é o segmento número 1.
+A seguir, a estrutura de uma entrada da tabela de segmentos.
+
+   Tamanho Descriçao
+   ---- -----------
+
+   DW Offset do setor lógico (n byte) para o conteúdo do segmento
+        dados, relativos ao início do arquivo. Zero significa que nao
+        dados do arquivo.
+
+   DW Comprimento do segmento no arquivo, em bytes. Zero significa 64K.
+
+   Palavra de bandeira de DW.
+        0007h = TYPE_MASK Campo do tipo de segmento.
+        0000h = CODE Tipo de segmento de código.
+        0001h = Tipo de segmento de dados de dados.
+        0010h = MOVEABLE O segmento nao é fixo.
+        0040h = O segmento PRELOAD será pré-carregado; somente leitura se
+                           este é um segmento de dados.
+        0100h = RELOCINFO Define se o segmento possui registros de realocaçao.
+        F000h = DESCARTE descartar a prioridade.
+
+   DW Tamanho mínimo de alocaçao do segmento, em bytes. Tamanho total
+        do segmento. Zero significa 64K.
+
+
+================================================== ====================
+                            TABELA DE RECURSOS
+================================================== ====================
+
+A tabela de recursos segue a tabela de segmentos e contém entradas para
+cada recurso no arquivo executável. A tabela de recursos consiste em
+uma contagem de deslocamento de alinhamento, seguida por uma tabela de registros de recursos. o
+Os registros de recursos definem o ID do tipo para um conjunto de recursos. Cada
+registro de recurso contém uma tabela de entradas de recursos do
+tipo. A entrada do recurso define o ID do recurso ou o ID do nome para o
+recurso. Também define a localizaçao e o tamanho do recurso. o
+A seguir descreve o conteúdo de cada uma dessas estruturas:
+
+   Tamanho Descriçao
+   ---- -----------
+
+   DW Contagem de deslocamento de alinhamento para dados de recursos.
+
+   Uma tabela de blocos de informaçoes do tipo de recurso é exibida a seguir. Os seguintes
+   é o formato de cada bloco de informaçao de tipo:
+
+        ID do tipo DW. Este é um tipo inteiro se o bit de alta ordem for
+            conjunto (8000h); caso contrário, é um deslocamento para a cadeia de tipos,
+            o deslocamento é relativo ao início do recurso
+            mesa. Um ID de tipo zero marca o final do tipo de recurso
+            blocos de informaçao.
+
+        DW Número de recursos para este tipo.
+
+        DD reservado.
+
+        Uma tabela de recursos para esse tipo segue. A seguir
+        o formato de cada recurso (8 bytes cada):
+
+            DW Desvio de arquivo para o conteúdo dos dados do recurso,
+                em relaçao ao início do arquivo. O offset está em termos
+                do valor da contagem de deslocamento de alinhamento especificado em
+                início da tabela de recursos.
+
+            DW Comprimento do recurso no arquivo (em bytes).
+
+            Palavra de bandeira de DW.
+                0010h = MOVEABLE O recurso nao é fixo.
+                0020h = O recurso PURE pode ser compartilhado.
+                0040h = PRELOAD O recurso é pré-carregado.
+
+            ID do recurso DW. Este é um tipo inteiro se a ordem alta
+                bit é setado (8000h), senao é o offset para o
+                cadeia de recursos, o deslocamento é relativo ao
+                início da tabela de recursos.
+
+            DD reservado.
+
+   As strings de tipo e nome de recurso sao armazenadas no final do
+   tabela de recursos. Observe que essas cadeias NAO sao terminadas em nulo e
+   diferenciam maiúsculas de minúsculas.
+
+   DB Comprimento do tipo ou cadeia de nomes que se segue. Um valor zero
+        indica o final do tipo de recurso e da cadeia de nome, também
+        o final da tabela de recursos.
+
+   Texto DB ASCII do tipo ou cadeia de nome.
+
+
+================================================== ====================
+                         MESA DE NOME DO RESIDENTE
+================================================== ====================
+
+A tabela residente-nome segue a tabela de recursos e contém este
+string de nome do módulo e cadeias de nome de procedimento exportadas residentes. o
+A primeira string nesta tabela é o nome deste módulo. Essas cadeias de nome
+sao sensíveis a maiúsculas e minúsculas e nao sao terminados em null. Os seguintes
+descreve o formato das strings de nome:
+
+   Tamanho Descriçao
+   ---- -----------
+
+   Comprimento do DB da sequencia de nomes que segue. Um valor zero indica
+        o final da tabela de nomes.
+
+   Texto DB ASCII da cadeia de nomes.
+
+   DW Número ordinal (índice na tabela de entrada). Este valor é ignorado
+        para o nome do módulo.
+
+
+================================================== ====================
+                        TABELA DE REFERENCIA DE MÓDULO
+================================================== ====================
+
+A tabela de referencia de módulo segue a tabela de nomes residentes. Cada entrada
+contém um deslocamento para a string module-name dentro do importado
+tabela de nomes; cada entrada tem 2 bytes de comprimento.
+
+   Tamanho Descriçao
+   ---- -----------
+
+   Deslocamento de DW dentro da tabela de nomes importados para o nome do módulo referenciado
+        corda.
+
+
+================================================== ====================
+                         TABELA DE NOMES IMPORTADOS
+================================================== ====================
+
+A tabela de nomes importados segue a tabela de referencia do módulo. Essa mesa
+contém os nomes dos módulos e procedimentos que sao importados pelo
+arquivo executável. Cada entrada é composta por um campo de 1 byte
+contém o tamanho da string, seguido por qualquer número de
+personagens. As cadeias de caracteres nao sao terminadas por caractere nulo e sao
+sensível.
+
+   Tamanho Descriçao
+   ---- -----------
+
+   Comprimento do DB da sequencia de nomes que segue.
+
+   Texto DB ASCII da cadeia de nomes.
+
+
+================================================== ====================
+                             TABELA DE ENTRADA
+================================================== ====================
+
+A tabela de entrada segue a tabela de nomes importados. Esta tabela contém
+pacotes de definiçoes de ponto de entrada. Agrupamento é feito para economizar espaço em
+a tabela de entrada. A tabela de entrada é acessada por um valor ordinal.
+O número um ordinal é definido para indexar a primeira entrada na entrada
+mesa. Para encontrar um ponto de entrada, os pacotes sao verificados procurando
+ponto de entrada específico usando um número ordinal. O número ordinal é
+ajustado conforme cada pacote é verificado. Quando o pacote que contém o
+ponto de entrada é encontrado, o número ordinal é multiplicado pelo tamanho
+as entradas do pacote para indexar a entrada apropriada.
+
+O linker forma pacotes da forma mais densa que puder, sob o
+restriçao de que nao é possível reordenar os pontos de entrada para melhorar o agrupamento.
+O motivo dessa restriçao é que outros arquivos .EXE podem se referir a
+pontos de entrada dentro deste pacote pelo seu número ordinal. Os seguintes
+descreve o formato dos pacotes da tabela de entrada.
+
+   Tamanho Descriçao
+   ---- -----------
+
+   DB Número de entradas neste pacote. Todos os registros em um pacote
+        sao móveis ou se referem ao mesmo segmento fixo. Um zero
+        valor neste campo indica o final da tabela de entrada.
+
+   Indicador de segmento de banco de dados para este pacote. Isso define o tipo de
+        dados de entrada da tabela de entrada no pacote. Há tres
+        tipos de entradas que sao definidas.
+
+        000h = entradas nao utilizadas. Nao há dados de entrada em um nao utilizado
+               agrupar. O próximo pacote segue este campo. Isto é
+               usado pelo linker para pular números ordinais.
+
+        001h-0FEh = Número do segmento para entradas de segmento fixas. Uma fixa
+               entrada do segmento é de 3 bytes de comprimento e tem o seguinte
+               formato.
+
+            Palavra de bandeira do banco de dados.
+                01h = Defina se a entrada for exportada.
+                02h = Defina se a entrada usa dados globais (compartilhados)
+                      segmentos.
+                      A primeira instruçao de linguagem assembly no
+                      ponto de entrada do prólogo deve ser "MOV AX, dados
+                      número do segmento ". Isso pode ser definido apenas para
+                      Módulos da biblioteca SINGLEDATA.
+
+            DW Deslocamento dentro do segmento para o ponto de entrada.
+
+        0FFH = Entradas de segmento móveis. Os dados de entrada contém o
+               número de segmento para os pontos de entrada. Um segmento móvel
+               A entrada tem 6 bytes e tem o seguinte formato.
+
+            Palavra de bandeira do banco de dados.
+                01h = Defina se a entrada for exportada.
+                02h = Defina se a entrada usa dados globais (compartilhados)
+                      segmentos.
+
+            INT 3FH.
+
+            Número do segmento do banco de dados.
+
+            DW Deslocamento dentro do segmento para o ponto de entrada.
+
+
+================================================== ====================
+                        TABELA DE NOME DO RESPONSÁVEL
+================================================== ====================
+
+A tabela de nomes nao residentes segue a tabela de entrada e contém uma
+descriçao do módulo e seqüencias de nomes de procedimento exportados nao residentes.
+A primeira string nesta tabela é uma descriçao do módulo. Estes nome
+seqüencias de caracteres diferenciam maiúsculas de minúsculas e nao sao terminadas por caractere nulo. O nome
+strings seguem o mesmo formato daqueles definidos no nome do residente
+mesa.
+
+
+================================================== ====================
+                           DADOS POR SEGMENTO
+================================================== ====================
+
+A localizaçao eo tamanho dos dados por segmento sao definidos no
+entrada de tabela de segmento para o segmento. Se o segmento tiver realocaçao
+fixups, conforme definido nos flags de entrada da tabela de segmento, eles
+siga os dados do segmento no arquivo. As informaçoes de correçao de realocaçao
+é definido da seguinte forma:
+
+
+   Tamanho Descriçao
+   ---- -----------
+
+   DW Número de registros de relocaçao que se seguem.
+
+   Uma tabela de registros de realocaçao segue. O seguinte é o formato
+   de cada registro de relocaçao.
+
+        Tipo de origem do banco de dados.
+            0Fh = SOURCE_MASK
+            00h = LOBYTE
+            02h = SEGMENTO
+            03h = FAR_ADDR (ponteiro de 32 bits)
+            05h = DESLOCAMENTO (deslocamento de 16 bits)
+
+        DB Flags byte.
+            03h = TARGET_MASK
+            00h = INTERNALREF
+            01h = IMPORTORDINAL
+            02h = IMPORTNAME
+            03h = OSFIXUP
+            04h = ADITIVO
+
+        Deslocamento de DW dentro deste segmento da cadeia de origem.
+            Se o sinalizador ADDITIVE estiver definido, o valor de destino será adicionado
+            o conteúdo da fonte, em vez de substituir a fonte e
+            seguindo a cadeia. A cadeia de origem é um 0FFFFh
+            lista ligada terminada dentro deste segmento de todos
+            referencias ao alvo.
+
+        O valor de destino tem quatro tipos definidos no sinalizador
+        campo byte. A seguir estao os formatos para cada destino
+        tipo:
+
+        INTERNALREF
+
+            Número do segmento do banco de dados para um segmento fixo ou 0FFh para um
+                segmento móvel.
+
+            DB 0
+
+            DW Offset into segment se segmento fixo ou ordinal
+                índice numérico na tabela de entrada se segmento móvel.
+
+        IMPORTNAME
+
+            DW Index na tabela de referencia do módulo para o importado
+                módulo.
+
+            Deslocamento de DW dentro da tabela de nomes importados para o nome do procedimento
+                corda.
+
+        IMPORTORDINAL
+
+            DW Index na tabela de referencia do módulo para o importado
+                módulo.
+            DW Procedimento número ordinal.
+
+        OSFIXUP
+
+            Tipo de correçao do sistema operacional DW.
+                Correçoes de ponto flutuante.
+                0001h = FIARQQ, FJARQQ
+                0002h = FISRQQ, FJSRQQ
+                0003h = FICRQQ, FJCRQQ
+                0004h = FIERQQ
+                0005h = FIDRQQ
+                0006h = FIWRQQ
+
+            DW 0
+
+================================================== ====================
+
+Microsoft é uma marca registrada e Windows é uma marca comercial da
+Corporaçao Microsoft.
+
+Outras palavras de referencia: 3,0

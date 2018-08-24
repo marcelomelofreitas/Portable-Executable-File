@@ -1,0 +1,1632 @@
+﻿ O formato de arquivo executável portátil de cima para baixo
+ 
+ Randy Kath
+ Grupo de Tecnologia de Rede do Microsoft Developer
+
+ Abstrato
+
+ O sistema operacional Windows NT versão 3.1 apresenta um novo arquivo executável
+ formato chamado o formato de arquivo Portable Executable (PE). O executável portátil
+ A especificação de formato de arquivo, embora bastante vaga, foi disponibilizada para o
+ public e está incluído no CD da Microsoft Developer Network (Specs and
+ Estratégia, especificações, especificações de formato de arquivo do Windows NT).
+
+ No entanto, essa especificação sozinha não fornece informações suficientes para torná-la
+ fácil, ou até mesmo razoável, para os desenvolvedores entenderem o formato de arquivo PE. este
+ artigo destina-se a resolver esse problema. Nele você encontrará uma minuciosa
+ explicação de todo o formato de arquivo PE, juntamente com as descrições de todos os
+ estruturas necessárias e exemplos de código fonte que demonstram como usar este
+ em formação.
+
+ Todos os exemplos de código fonte que aparecem neste artigo são retirados de um
+ biblioteca de vínculo dinâmico (DLL) chamado PEFILE.DLL. Eu escrevi essa DLL simplesmente para o
+ objetivo de obter as informações importantes contidas em um arquivo PE. o
+ DLL e seu código-fonte também estão incluídos neste CD como parte do PEFile
+ aplicativo de amostra; sinta-se à vontade para usar a DLL em seus próprios aplicativos. Além disso,
+ sinta-se livre para tomar o código-fonte e construir sobre ele para qualquer finalidade específica que você
+ pode ter. No final deste artigo, você encontrará uma breve lista das funções
+ exportados do PEFILE.DLL e uma explicação de como usá-los. eu acho que
+ você verá que essas funções facilitam o entendimento do formato do arquivo PE
+ lidar com.
+
+ Introdução
+
+ A recente adição do sistema operacional Microsoft® Windows NT ao
+ família de sistemas operacionais Windows trouxe muitas mudanças para o desenvolvimento
+ ambiente e mais do que algumas mudanças nas próprias aplicações. Um dos
+ mudanças mais significativas é a introdução do Portable Executable (PE)
+ formato de arquivo. O novo formato de ficheiro PE baseia-se principalmente no COFF (Common
+ Especificação de formato de arquivo de objeto) que é comum aos sistemas operacionais UNIX®.
+ Ainda assim, para permanecer compatível com as versões anteriores do MS-DOS® e do Windows
+ sistemas operacionais, o formato de arquivo PE também mantém o antigo cabeçalho MZ
+ do MS-DOS.
+
+ Neste artigo, o formato de arquivo PE é explicado usando uma abordagem de cima para baixo.
+ Este artigo discute cada um dos componentes do arquivo como eles ocorrem quando
+ você percorre o conteúdo do arquivo, começando no topo e descendo o seu caminho
+ através do arquivo.
+
+ Grande parte da definição de componentes de arquivos individuais vem do arquivo
+ WINNT.H, um arquivo incluído no Kit de desenvolvimento de software (SDK) do Microsoft Win32 ™
+ para o Windows NT. Nele você encontrará definições de tipo de estrutura para cada um dos
+ cabeçalhos de arquivos e diretórios de dados usados ​​para representar vários componentes
+ Arquivo. Em outros locais no arquivo, o WINNT.H não possui uma definição suficiente
+ estrutura de arquivos. Nestes lugares, escolhi definir minhas próprias estruturas que podem
+ ser usado para acessar os dados do arquivo. Você encontrará essas estruturas
+ definido em PEFILE.H, um arquivo usado para criar o PEFILE.DLL. Todo o conjunto de
+ Os arquivos de desenvolvimento PEFILE.H estão incluídos no aplicativo de amostra PEFile.
+
+ Além do código de exemplo PEFILE.DLL, uma amostra separada baseada em Win32
+ aplicativo chamado EXEVIEW.EXE acompanha este artigo. Esta amostra foi
+ criado para dois propósitos: primeiro, eu precisava de uma maneira de testar o
+ Funções PEFILE.DLL, que em alguns casos exigiam várias visualizações de arquivos
+ simultaneamente - daí o suporte a múltiplas visualizações. Em segundo lugar, muito do trabalho de
+ Descobrir o formato do arquivo PE envolve a capacidade de ver os dados de forma interativa.
+ Por exemplo, para entender como a tabela de nomes de endereços de importação é estruturada,
+ tinha que ver o cabeçalho da seção .idata, o diretório de dados da imagem de importação, o
+ cabeçalho opcional, e o corpo da seção .idata real, todos simultaneamente.
+ EXEVIEW.EXE é o exemplo perfeito para visualizar essas informações.
+
+ Sem mais delongas, vamos começar.
+
+ Estrutura de arquivos PE
+
+ O formato de arquivo PE é organizado como um fluxo linear de dados. Começa com um
+ Cabeçalho do MS-DOS, um stub de programa em modo real e uma assinatura de arquivo PE. Imediatamente
+ A seguir, um cabeçalho de arquivo PE e um cabeçalho opcional. Além disso, toda a seção
+ cabeçalhos aparecem, seguidos por todos os corpos da seção. Fechando o arquivo são
+ algumas outras regiões de informações diversas, incluindo a relocação
+ informações, informações da tabela de símbolos, informações sobre o número da linha e string
+ dados da tabela. Tudo isso é mais facilmente absorvido olhando-se graficamente,
+ conforme mostrado na Figura 1.
+
+ Figura 1. Estrutura de uma imagem de arquivo executável portátil
+
+ Começando com a estrutura do cabeçalho do arquivo MS-DOS, cada um dos componentes
+ Formato de arquivo PE é discutido abaixo na ordem em que ocorre no arquivo.
+ Grande parte dessa discussão é baseada em código de exemplo que demonstra como chegar
+ as informações no arquivo. Todo o código de amostra é retirado do arquivo
+ PEFILE.C, o módulo de origem para PEFILE.DLL. Cada um desses exemplos leva
+ vantagem de um dos recursos mais legais do Windows NT, arquivos mapeados na memória.
+ Arquivos mapeados na memória permitem o uso de desreferência de ponteiro simples para acessar
+ os dados contidos no arquivo. Cada um dos exemplos usa mapeamento de memória
+ arquivos para acessar dados em arquivos PE.
+
+ Nota Consulte a seção no final deste artigo para uma discussão sobre como
+ use o PEFILE.DLL.
+
+ Cabeçalho do modo MS-DOS / Real
+
+ Como mencionado acima, o primeiro componente no formato de arquivo PE é o MS-DOS
+ cabeçalho. O cabeçalho do MS-DOS não é novo para o formato de arquivo PE. É o mesmo
+ Cabeçalho do MS-DOS que existe desde a versão 2 do MS-DOS operando
+ sistema. A principal razão para manter a mesma estrutura intacta no início
+ do formato de arquivo PE é para que, quando você tenta carregar um arquivo criado sob
+ Windows versão 3.1 ou anterior, ou MS DOS versão 2.0 ou posterior, o sistema operacional
+ sistema pode ler o arquivo e entender que não é compatível. Em outro
+ palavras, quando você tenta executar um executável do Windows NT no MS-DOS versão 6.0,
+ você recebe esta mensagem: "Este programa não pode ser executado no modo DOS." Se o MS-DOS
+ cabeçalho não foi incluído como a primeira parte do formato de arquivo PE, o
+ sistema iria simplesmente falhar a tentativa de carregar o arquivo e oferecer algo
+ completamente inútil, como: "O nome especificado não é reconhecido como um
+ comando interno ou externo, programa operável ou arquivo de lote. "
+
+ O cabeçalho do MS-DOS ocupa os primeiros 64 bytes do arquivo PE. Uma estrutura
+ representando o seu conteúdo é descrito abaixo:
+
+ WINNT.H
+
+ typedef struct _IMAGE_DOS_HEADER {// cabeçalho do DOS .EXE
+     USHORT e_magic; // Número mágico
+     USHORT e_cblp; // Bytes na última página do arquivo
+     USHORT e_cp; // Páginas no arquivo
+     USHORT e_crlc; // Realocações
+     USHORT e_cparhdr; // Tamanho do cabeçalho nos parágrafos
+     USHORT e_minalloc; // Parâmetros mínimos extras necessários
+     USHORT e_maxalloc; // Máximo de parágrafos extras necessários
+     USHORT e_ss; // Valor inicial (relativo) de SS
+     USHORT e_sp; // Valor inicial de SP
+     USHORT e_csum; // Checksum
+     USHORT e_ip; // Valor inicial do IP
+     USHORT e_cs; // Valor inicial do CS (relativo)
+     USHORT e_lfarlc; // Endereço do arquivo da tabela de realocação
+     USHORT e_ovno; // Número de sobreposição
+     USHORT e_res [4]; // Palavras reservadas
+     USHORT e_oemid; // identificador OEM (para e_oeminfo)
+     USHORT e_oeminfo; // informações do OEM; e_oemid specific
+     USHORT e_res2 [10]; // Palavras reservadas
+     LONG e_lfanew; // Endereço do arquivo do novo cabeçalho exe
+   } IMAGE_DOS_HEADER, * PIMAGE_DOS_HEADER;
+
+ O primeiro campo, e_magic, é o chamado número mágico. Este campo é usado para
+ identificar um tipo de arquivo compatível com o MS-DOS. Todos os arquivos executáveis ​​compatíveis com o MS-DOS
+ defina este valor para 0x54AD, que representa os caracteres ASCII MZ. MS-DOS
+ os cabeçalhos são às vezes chamados de cabeçalhos MZ por esse motivo. Muitos outros
+ campos são importantes para sistemas operacionais MS-DOS, mas para o Windows NT, não há
+ realmente um campo mais importante nessa estrutura. O campo final, e_lfanew,
+ é um deslocamento de 4 bytes no arquivo em que o cabeçalho do arquivo PE está localizado. Isto é
+ necessário usar esse deslocamento para localizar o cabeçalho PE no arquivo. Para arquivos PE
+ no Windows NT, o cabeçalho do arquivo PE ocorre logo após o cabeçalho do MS-DOS com apenas
+ o programa stub de modo real entre eles.
+
+ Programa de esboço em modo real
+
+ O programa stub de modo real é um programa real executado pelo MS-DOS quando o
+ executável está carregado. Para um arquivo de imagem executável do MS-DOS real, o
+ aplicativo começa a executar aqui. Para sistemas operacionais sucessivos, incluindo
+ Windows, OS / 2® e Windows NT, um programa stub do MS-DOS é colocado aqui que é executado
+ em vez da aplicação real. Os programas normalmente não fazem mais que
+ saída uma linha de texto, como: "Este programa requer o Microsoft Windows v3.1
+ ou maior. "Claro, quem cria o aplicativo é capaz de colocar qualquer
+ stub eles gostam aqui, o que significa que muitas vezes você pode ver coisas como: "Você não pode executar um
+ Aplicação do Windows NT no OS / 2, simplesmente não é possível ".
+
+ Ao criar um aplicativo para o Windows versão 3.1, o vinculador vincula um
+ programa stub padrão chamado WINSTUB.EXE em seu executável. Você pode substituir
+ o comportamento de vinculador padrão substituindo seu próprio programa baseado em MS-DOS válido
+ no lugar de WINSTUB e indicando isso para o vinculador com o módulo STUB
+ declaração de definição. Aplicativos desenvolvidos para o Windows NT podem fazer o mesmo
+ coisa usando a opção -STUB: linker ao ligar o arquivo executável.
+
+ Cabeçalho e Assinatura do Arquivo PE
+
+ O cabeçalho do arquivo PE está localizado indexando o campo e_lfanew do MS-DOS
+ cabeçalho. O campo e_lfanew simplesmente dá o offset no arquivo, então adicione o
+ endereço base mapeado na memória do arquivo para determinar o mapeamento
+ endereço. Por exemplo, a macro a seguir está incluída na fonte PEFILE.H
+ Arquivo:
+
+ PEFILE.H
+
+ #define NTSIGNATURE (a) ((LPVOID) ((BYTE *) a + \
+                         ((PIMAGE_DOS_HEADER) a) -> e_lfanew))
+
+ Ao manipular as informações do arquivo PE, descobri que havia várias
+ locais no arquivo que eu precisava me referir com frequência. Desde esses locais
+ são apenas deslocamentos para o arquivo, é mais fácil implementar esses locais
+ macros porque fornecem desempenho muito melhor do que as funções.
+
+ Observe que, em vez de recuperar o deslocamento do cabeçalho do arquivo PE, essa macro
+ recupera o local da assinatura do arquivo PE. Começando com o Windows e o OS / 2
+ executáveis, os arquivos .EXE receberam assinaturas de arquivos para especificar
+ sistema operacional de destino. Para o formato de arquivo PE no Windows NT, esta assinatura
+ ocorre imediatamente antes da estrutura do cabeçalho do arquivo PE. Nas versões do Windows
+ e OS / 2, a assinatura é a primeira palavra do cabeçalho do arquivo. Além disso, para o PE
+ formato de arquivo, o Windows NT usa um DWORD para a assinatura.
+
+ A macro apresentada acima retorna o deslocamento de onde a assinatura do arquivo
+ aparece, independentemente de qual tipo de arquivo executável é. Então, dependendo de
+ seja uma assinatura de arquivo do Windows NT ou não, o cabeçalho do arquivo existe
+ após a assinatura DWORD ou na assinatura WORD. Para resolver essa confusão,
+ Eu escrevi a função ImageFileType (seguinte), que retorna o tipo de imagem
+ Arquivo:
+
+ PEFILE.C
+
+ DWORD WINAPI ImageFileType (
+     LPVOID lpFile)
+ {
+     / * A assinatura do arquivo DOS vem em primeiro lugar. * /
+     if (* (USHORT *) lpFile == IMAGE_DOS_SIGNATURE)
+         {
+         / * Determinar a localização do cabeçalho do arquivo PE de
+            Cabeçalho DOS. * /
+         if (LOWORD (* (DWORD *) NTSIGNATURE (lpFile)) ==
+                                 IMAGE_OS2_SIGNATURE ||
+             LOWORD (* (DWORD *) NTSIGNATURE (lpFile)) ==
+                              IMAGE_OS2_SIGNATURE_LE)
+             retornar (DWORD) LOWORD (* (DWORD *) NTSIGNATURE (lpFile));
+
+         else if (* (DWORD *) NTSIGNATURE (lpFile) ==
+                             IMAGE_NT_SIGNATURE)
+             retornar IMAGE_NT_SIGNATURE;
+
+         outro
+             retornar IMAGE_DOS_SIGNATURE;
+         }
+
+     outro
+         /* Tipo de ficheiro desconhecido */
+         return 0;
+ }
+
+ O código listado acima mostra rapidamente a utilidade da macro NTSIGNATURE.
+ A macro facilita comparar os diferentes tipos de arquivos e retornar o
+ apropriado para um determinado tipo de arquivo. Os quatro tipos de arquivos diferentes definidos
+ no WINNT.H são:
+
+ WINNT.H
+
+ #define IMAGE_DOS_SIGNATURE 0x5A4D // MZ
+ #define IMAGE_OS2_SIGNATURE 0x454E // NE
+ #define IMAGE_OS2_SIGNATURE_LE 0x454C // LE
+ #define IMAGE_NT_SIGNATURE 0x00004550 // PE00
+
+ A princípio, parece curioso que os tipos de arquivos executáveis ​​do Windows não apareçam
+ esta lista. Mas então, depois de uma pequena investigação, a razão fica clara:
+ Não há diferença entre os executáveis ​​do Windows e os executáveis ​​do OS / 2
+ diferente da especificação de versão do sistema operacional. Ambos os sistemas operacionais
+ compartilhe a mesma estrutura de arquivos executáveis.
+
+ Voltando nossa atenção para o formato de arquivo PE do Windows NT, descobrimos que uma vez
+ temos a localização da assinatura do arquivo, o arquivo PE segue quatro bytes
+ mais tarde. A próxima macro identifica o cabeçalho do arquivo PE:
+
+ PEFILE.C
+
+ #define PEFHDROFFSET (a) ((LPVOID) ((BYTE *) a + \
+     ((PIMAGE_DOS_HEADER) a) -> e_lfanew + SIZE_OF_NT_SIGNATURE))
+
+ A única diferença entre esta e a macro anterior é que esta adiciona
+ na constante SIZE_OF_NT_SIGNATURE. É triste dizer que esta constante não está definida
+ no WINNT.H, mas é um que eu defini no PEFILE.H como o tamanho de um DWORD.
+
+ Agora que sabemos a localização do cabeçalho do arquivo PE, podemos examinar os dados em
+ o cabeçalho simplesmente atribuindo este local a uma estrutura, como no
+ seguinte exemplo:
+
+ PIMAGE_FILE_HEADER pfh;
+
+ pfh = (PIMAGE_FILE_HEADER) PEFHDROFFSET (lpFile);
+
+ Neste exemplo, lpFile representa um ponteiro para a base da memória mapeada
+ executável, e aí reside a conveniência dos arquivos mapeados na memória. Não
+ E / S de arquivo precisa ser executada; simplesmente desreferencia o ponteiro pfh para acessar
+ informações no arquivo. A estrutura do cabeçalho do arquivo PE é definida como:
+
+ WINNT.H
+
+ typedef struct _IMAGE_FILE_HEADER {
+     Máquina USHORT;
+     USHORT NumberOfSections;
+     ULONG TimeDateStamp;
+     ULONG PointerToSymbolTable;
+     ULONG NumberOfSymbols;
+     USHORT SizeOfOptionalHeader;
+     Características do USHORT;
+ } IMAGE_FILE_HEADER, * PIMAGE_FILE_HEADER;
+
+ #define IMAGE_SIZEOF_FILE_HEADER 20
+
+ Observe que o tamanho da estrutura do cabeçalho do arquivo é convenientemente
+ o arquivo de inclusão. Isso facilita a obtenção do tamanho da estrutura, mas eu
+ achou mais fácil usar o tamanho da função na própria estrutura porque
+ não requer que eu me lembre do nome da constante
+ IMAGE_SIZEOF_FILE_HEADER além do nome da estrutura IMAGE_FILE_HEADER
+ em si. Por outro lado, lembrar o nome de todas as estruturas provou
+ bastante desafiador, especialmente porque nenhuma dessas estruturas é documentada
+ em qualquer lugar, exceto no arquivo de inclusão WINNT.H.
+
+ As informações no arquivo PE são basicamente informações de alto nível que são usadas
+ pelo sistema ou aplicativos para determinar como tratar o arquivo. O primeiro
+ campo é usado para indicar que tipo de máquina o executável foi criado,
+ como o DEC® Alpha, o MIPS R4000, o Intel® x86 ou algum outro processador. o
+ sistema usa essas informações para determinar rapidamente como tratar o arquivo antes
+ indo mais longe no resto dos dados do arquivo.
+
+ O campo Características identifica características específicas sobre o arquivo.
+ Por exemplo, considere como arquivos de depuração separados são gerenciados para um executável.
+ É possível remover informações de depuração de um arquivo PE e armazená-lo em um
+ arquivo de depuração (.DBG) para uso por depuradores. Para fazer isso, um depurador precisa saber
+ se encontrar as informações de depuração em um arquivo separado ou não e se o
+ informações foram removidas do arquivo ou não. Um depurador pode descobrir
+ explorando o arquivo executável procurando por informações de depuração. Para
+ salvar o depurador de ter que procurar o arquivo, uma característica de arquivo que
+ indica que o arquivo foi retirado (IMAGE_FILE_DEBUG_STRIPPED)
+ inventado. Os depuradores podem procurar no cabeçalho do arquivo PE para determinar rapidamente se
+ as informações de depuração estão presentes no arquivo ou não.
+
+ WINNT.H define vários outros sinalizadores que indicam informações de cabeçalho de arquivo
+ da maneira que o exemplo descrito acima faz. Vou deixar isso como um exercício para o
+ leitor para procurar as bandeiras para ver se algum deles é interessante ou não. Eles
+ estão localizados no WINNT.H imediatamente após a estrutura IMAGE_FILE_HEADER
+ descrito acima.
+
+ Uma outra entrada útil na estrutura do cabeçalho do arquivo PE é o NumberOfSections
+ campo. Acontece que você precisa saber quantas seções - mais especificamente,
+ quantos cabeçalhos de seção e corpos de seção - estão no arquivo para
+ extrair a informação facilmente. Cada cabeçalho de seção e corpo de seção é colocado
+ fora sequencialmente no arquivo, então o número de seções é necessário para
+ determine onde os cabeçalhos e corpos da seção terminam. A seguinte função
+ extrai o número de seções do cabeçalho do arquivo PE:
+
+ PEFILE.C
+
+ int WINAPI NumOfSections (
+     LPVOID lpFile)
+ {
+     / * Número de seções é indicado no cabeçalho do arquivo. * /
+     return (int) ((PIMAGE_FILE_HEADER)
+                   PEFHDROFFSET (lpFile)) -> NumberOfSections);
+ }
+
+ Como você pode ver, o PEFHDROFFSET e as outras macros são muito úteis para ter
+ por aí.
+
+ Cabeçalho Opcional de PE
+
+ Os 224 bytes seguintes no arquivo executável formam o cabeçalho opcional do PE.
+ Embora seu nome seja "cabeçalho opcional", tenha certeza de que este não é um opcional
+ entrada nos arquivos executáveis ​​do PE. Um ponteiro para o cabeçalho opcional é obtido com
+ a macro OPTHDROFFSET:
+
+ PEFILE.H
+
+ #define OPTHDROFFSET (a) ((LPVOID) ((BYTE *) a + \
+     ((PIMAGE_DOS_HEADER) a) -> e_lfanew + SIZE_OF_NT_SIGNATURE + \
+     sizeof (IMAGE_FILE_HEADER)))
+
+ O cabeçalho opcional contém a maioria das informações significativas sobre o
+ imagem executável, como tamanho da pilha inicial, localização do ponto de entrada do programa,
+ endereço base preferido, versão do sistema operacional, alinhamento de seção
+ informação, e assim por diante. A estrutura IMAGE_OPTIONAL_HEADER representa o
+ cabeçalho opcional da seguinte forma:
+
+ WINNT.H
+
+ typedef struct _IMAGE_OPTIONAL_HEADER {
+     //
+     // campos padrão.
+     //
+     USHORT Magic;
+     UCHAR MajorLinkerVersion;
+     UCHAR MinorLinkerVersion;
+     ULONG SizeOfCode;
+     ULONG SizeOfInitializedData;
+     ULONG SizeOfUninitializedData;
+     ULONG AddressOfEntryPoint;
+     ULONG BaseOfCode;
+     ULONG BaseOfData;
+     //
+     // campos adicionais do NT.
+     //
+     ULONG ImageBase;
+     ALONG Section Alignment;
+     ULONG FileAlignment;
+     USHORT MajorOperatingSystemVersion;
+     USHORT MinorOperatingSystemVersion;
+     USHORT MajorImageVersion;
+     USHORT MinorImageVersion;
+     USHORT MajorSubsystemVersion;
+     USHORT MinorSubsystemVersion;
+     ULONG Reservado1;
+     ULONG SizeOfImage;
+     ULONG SizeOfHeaders;
+     ULONG CheckSum;
+     Subsistema USHORT;
+     DllCharacteristics do USHORT;
+     ULONG SizeOfStackReserve;
+     ULONG SizeOfStackCommit;
+     ULONG SizeOfHeapReserve;
+     ULONG SizeOfHeapCommit;
+     ULONG LoaderFlags;
+     ULONG NumberOfRvaAndSizes;
+     IMAGE_DATA_DIRECTORY DataDirectory [IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
+ } IMAGE_OPTIONAL_HEADER, * PIMAGE_OPTIONAL_HEADER;
+
+ Como você pode ver, a lista de campos nessa estrutura é bastante longa. Em vez
+ que te aborrecer com descrições de todos esses campos, eu vou simplesmente discutir o
+ úteis - isto é, úteis no contexto de explorar o formato de arquivo PE.
+
+ Campos padrão
+
+ Primeiro, observe que a estrutura é dividida em "campos padrão" e "NT
+ campos adicionais. "Os campos padrão são aqueles comuns ao Objeto Comum
+ File Format (COFF), que a maioria dos arquivos executáveis ​​do UNIX usa. Embora o padrão
+ campos reter os nomes definidos no COFF, o Windows NT, na verdade, usa alguns deles
+ para diferentes propósitos que seriam melhor descritos com outros nomes.
+
+    * Magia. Não consegui rastrear para que esse campo é usado. Para o
+      Aplicação de exemplo EXEVIEW.EXE, o valor é 0x010B ou 267.
+    * MajorLinkerVersion, MinorLinkerVersion. Indica a versão do vinculador
+      que ligava essa imagem. O desenvolvimento preliminar de software do Windows NT
+      Kit (SDK), fornecido com compilar 438 do Windows NT, inclui vinculador
+      versão 2.39 (2.27 hex)
+    * SizeOfCode. Tamanho do código executável.
+    * SizeOfInitializedData. Tamanho dos dados inicializados.
+    * SizeOfUninitializedData. Tamanho dos dados não inicializados.
+    * AddressOfEntryPoint. Dos campos padrão, o campo AddressOfEntryPoint
+      é o mais interessante para o formato de arquivo PE. Este campo indica o
+      localização do ponto de entrada para a aplicação e, talvez mais
+      importante para os hackers do sistema, a localização do fim da Importação
+      Tabela de Endereços (IAT). A seguinte função demonstra como recuperar
+      o ponto de entrada de uma imagem executável do Windows NT do cabeçalho opcional.
+
+      PEFILE.C
+
+           LPVOID WINAPI GetModuleEntryPoint (
+               LPVOID lpFile)
+           {
+               PIMAGE_OPTIONAL_HEADER poh;
+
+               poh = (PIMAGE_OPTIONAL_HEADER) OPTHDROFFSET (lpFile);
+
+               if (poh! = NULL)
+                   return (LPVOID) poh-> AddressOfEntryPoint;
+               outro
+                   return NULL;
+           }
+
+    * BaseOfCode. Deslocamento relativo do código (seção ".text") na imagem carregada.
+    * BaseOfData. Deslocamento relativo de dados não inicializados (seção ".bss") em
+      imagem carregada.
+
+ Campos Adicionais do Windows NT
+
+ Os campos adicionais adicionados ao formato de arquivo PE do Windows NT fornecem carregador
+ suporte para grande parte do comportamento do processo específico do Windows NT. A seguir é um
+ resumo desses campos.
+
+    * Base de Imagens. Endereço base preferencial no espaço de endereço de um processo para mapear
+      a imagem executável para. O vinculador que vem com o Microsoft Win32
+      O padrão do SDK para Windows NT é 0x00400000, mas você pode substituir
+      padrão com a opção -BASE: linker.
+    * SectionAlignment. Cada seção é carregada no espaço de endereço de um
+      processo sequencialmente, começando no ImageBase. O SectionAlignment dita
+      a quantidade mínima de espaço que uma seção pode ocupar quando carregada - isto é,
+      as seções são alinhadas nos limites de SectionAlignment.
+
+      O alinhamento de seção não pode ser menor que o tamanho da página (atualmente 4096 bytes
+      na plataforma x86) e deve ser um múltiplo do tamanho da página conforme ditado
+      pelo comportamento do gerenciador de memória virtual do Windows NT. 4096 bytes é o
+      x86 linker default, mas isso pode ser definido usando o switch de linker -ALIGN:.
+
+    * FileAlignment. Granularidade mínima de pedaços de informação dentro do
+      arquivo de imagem antes do carregamento. Por exemplo, o linker zera uma seção
+      corpo (dados brutos para uma seção) até o limite FileAlignment mais próximo
+      o arquivo. A versão 2.39 do linker mencionado anteriormente alinha arquivos de imagem
+      em uma granularidade de 0x200 bytes. Este valor é restrito para ser uma potência de 2
+      entre 512 e 65.535.
+    * MajorOperatingSystemVersion. Indica a versão principal do Windows
+      Sistema operacional NT, atualmente definido como 1 para o Windows NT versão 1.0.
+    * MinorOperatingSystemVersion. Indica a versão secundária do Windows NT
+      sistema operacional, atualmente definido como 0 para o Windows NT versão 1.0
+    * MajorImageVersion. Usado para indicar o número da versão principal do
+      aplicação; no Microsoft Excel versão 4.0, seria 4.
+    * MinorImageVersion. Usado para indicar o número da versão secundária do
+      aplicação; no Microsoft Excel versão 4.0, seria 0.
+    * MajorSubsystemVersion. Indica o subsistema principal do Windows NT Win32
+      número de versão, atualmente definido como 3 para o Windows NT versão 3.10.
+    * MinorSubsystemVersion. Indica o menor subsistema Windows NT Win32
+      número de versão, atualmente definido como 10 para o Windows NT versão 3.10.
+    * Reservado1. Finalidade desconhecida, atualmente não usada pelo sistema e definida como
+      zero pelo vinculador.
+    * * SizeOfImage. Indica a quantidade de espaço de endereço a ser reservado no
+      espaço de endereço para a imagem executável carregada. Esse número é influenciado
+      muito pelo SectionAlignment. Por exemplo, considere um sistema com um
+      tamanho de página de 4096 bytes. Se você tiver um executável com 11 seções, cada
+      menos de 4096 bytes, alinhados em um limite de 65.536 bytes, o SizeOfImage
+      campo seria definido para 11 * 65.536 = 720.896 (176 páginas). O mesmo arquivo
+      vinculado ao alinhamento de 4096 bytes resultaria em 11 * 4096 = 45.056 (11
+      páginas) para o campo SizeOfImage. Este é um exemplo simples em que cada
+      seção requer menos de uma página de memória. Na realidade, o linker
+      determina o SizeOfImage exato, calculando cada seção individualmente. isto
+      primeiro determina quantos bytes a seção requer, então arredonda para
+      limite da página mais próxima e, finalmente, arredonda a contagem de páginas para o mais próximo
+      Limite de SectionAlignment. O total é então a soma de cada seção
+      exigência individual.
+    * SizeOfHeaders. Este campo indica quanto espaço no arquivo é usado para
+      representando todos os cabeçalhos de arquivo, incluindo o cabeçalho do MS-DOS, o arquivo PE
+      cabeçalho, cabeçalho opcional PE e cabeçalhos de seção PE. Os corpos da seção
+      comece neste local no arquivo.
+    * CheckSum. Um valor de soma de verificação é usado para validar o arquivo executável na carga
+      Tempo. O valor é definido e verificado pelo vinculador. O algoritmo usado para
+      criar esses valores de soma de verificação é informação proprietária e não será
+      Publicados.
+    * Subsistema. Campo usado para identificar o subsistema de destino para este
+      executável. Cada um dos valores possíveis do subsistema é listado no
+      Arquivo WINNT.H imediatamente após a estrutura IMAGE_OPTIONAL_HEADER.
+    * DllCharacteristics. Sinalizadores usados ​​para indicar se uma imagem DLL inclui entrada
+      pontos para inicialização e finalização de processos e segmentos.
+    SizeOfStackReserve, SizeOfStackCommit, SizeOfHeapReserve,
+      SizeOfHeapCommit. Esses campos controlam a quantidade de espaço de endereço para
+      reservar e confirmar a pilha e a pilha padrão. Tanto a pilha como o heap
+      tem valores padrão de 1 página confirmada e 16 páginas reservadas. Estes
+      os valores são definidos com as opções do vinculador -STACKSIZE: e -HEAPSIZE :.
+	  
+    * LoaderFlags Diz ao carregador se quer quebrar na carga, depurar na carga ou
+      o padrão, que é deixar as coisas rodarem normalmente.
+	  
+    * NumberOfRvaAndSizes. Este campo identifica o comprimento do DataDirectory
+      array que segue. É importante notar que este campo é usado para
+      identificar o tamanho da matriz, não o número de entradas válidas na
+      array.
+	  
+    * DataDirectory. O diretório de dados indica onde encontrar outros
+      componentes de informações executáveis ​​no arquivo. Realmente não é nada
+      mais do que uma matriz de estruturas IMAGE_DATA_DIRECTORY localizadas em
+      o final da estrutura do cabeçalho opcional. O formato de arquivo atual do PE
+      define 16 diretórios de dados possíveis, 11 dos quais estão sendo usados ​​agora.
+
+ Diretórios de dados
+
+ Conforme definido no WINNT.H, os diretórios de dados são:
+
+ WINNT.H
+
+ // Entradas do diretório
+
+ // Diretório de exportação
+ #define IMAGE_DIRECTORY_ENTRY_EXPORT 0
+ // Diretório de Importação
+ #define IMAGE_DIRECTORY_ENTRY_IMPORT 1
+ // Diretório de Recursos
+ #define IMAGE_DIRECTORY_ENTRY_RESOURCE 2
+ // Diretório de exceções
+ #define IMAGE_DIRECTORY_ENTRY_EXCEPTION 3
+ // Diretório de Segurança
+ #define IMAGE_DIRECTORY_ENTRY_SECURITY 4
+ // Base Relocation Table
+ #define IMAGE_DIRECTORY_ENTRY_BASERELOC 5
+ // Debug Directory
+ #define IMAGE_DIRECTORY_ENTRY_DEBUG 6
+ // Descrição String
+ #define IMAGE_DIRECTORY_ENTRY_COPYRIGHT 7
+ // Valor da Máquina (MIPS GP)
+ #define IMAGE_DIRECTORY_ENTRY_GLOBALPTR 8
+ // Diretório TLS
+ #define IMAGE_DIRECTORY_ENTRY_TLS 9
+ // Carregar Diretório de Configuração
+ #define IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG 10
+
+ Cada diretório de dados é basicamente uma estrutura definida como
+ IMAGE_DATA_DIRECTORY. E, embora as entradas do diretório de dados sejam as mesmas
+ mesmo, cada tipo de diretório específico é inteiramente único. A definição de cada
+ O diretório de dados definido é descrito em "Seções pré-definidas" mais adiante neste
+ artigo.
+
+ WINNT.H
+
+ typedef struct _IMAGE_DATA_DIRECTORY {
+     ULONG VirtualAddress;
+     Tamanho ULONG;
+ } IMAGE_DATA_DIRECTORY, * PIMAGE_DATA_DIRECTORY;
+
+ Cada entrada do diretório de dados especifica o tamanho e o endereço virtual relativo
+ o diretório. Para localizar um diretório específico, você determina o parente
+ endereço da matriz do diretório de dados no cabeçalho opcional. Então use o
+ endereço virtual para determinar em qual seção o diretório está.
+ determinar qual seção contém o diretório, o cabeçalho da seção para esse
+ A seção é então usada para encontrar a localização exata do deslocamento do arquivo dos dados.
+ diretório.
+
+ Então, para obter um diretório de dados, primeiro você precisa saber sobre as seções, que são
+ descrito a seguir. Um exemplo de como localizar diretórios de dados imediatamente
+ segue esta discussão.
+
+ Seções de arquivos PE
+
+ A especificação do arquivo PE consiste nos cabeçalhos definidos até o momento e um genérico
+ objeto chamado uma seção. As seções contêm o conteúdo do arquivo, incluindo
+ código, dados, recursos e outras informações executáveis. Cada seção tem um
+ cabeçalho e um corpo (os dados brutos). Os cabeçalhos de seção são descritos abaixo, mas
+ Os órgãos da seção não possuem uma estrutura de arquivos rígida. Eles podem ser organizados em quase qualquer
+ como um linker deseja organizá-los, desde que o cabeçalho seja preenchido com
+ informações suficientes para poder decifrar os dados.
+
+ Cabeçalhos de Seção
+
+ Os cabeçalhos de seção estão localizados sequencialmente logo após o cabeçalho opcional no
+ Formato de arquivo PE. Cada cabeçalho de seção é de 40 bytes sem preenchimento entre eles.
+ Os cabeçalhos de seção são definidos na seguinte estrutura:
+
+ WINNT.H
+
+ #define IMAGE_SIZEOF_SHORT_NAME 8
+
+ typedef struct _IMAGE_SECTION_HEADER {
+     Nome UCHAR [IMAGE_SIZEOF_SHORT_NAME];
+     União {
+             ULONG PhysicalAddress;
+             ULONG VirtualSize;
+     } Misc.
+     ULONG VirtualAddress;
+     ULONG SizeOfRawData;
+     ULONG PointerToRawData;
+     ULONG PointerToRelocations;
+     ULONG PointerToLinenumbers;
+     USHORT NumberOfRelocations;
+     USHORT NumberOfLinenumbers;
+     ULONG Características;
+ } IMAGE_SECTION_HEADER, * PIMAGE_SECTION_HEADER;
+
+ Como você faz para obter as informações do cabeçalho da seção de um determinado
+ seção? Como os cabeçalhos de seção são organizados seqüencialmente em nenhuma ordem específica,
+ os cabeçalhos de seção devem estar localizados por nome. A seguinte função mostra como
+ recuperar um cabeçalho de seção de um arquivo de imagem PE, dado o nome da seção:
+
+ PEFILE.C
+
+ BOOL WINAPI GetSectionHdrByName (
+     LPVOID lpFile,
+     IMAGE_SECTION_HEADER * sh,
+     char * szSection)
+ {
+     PIMAGE_SECTION_HEADER psh;
+     int nSections = NumOfSections (lpFile);
+     int i;
+
+     if ((psh = (PIMAGE_SECTION_HEADER) SECHDROFFSET (lpFile))!
+          NULO)
+         {
+         / * encontrar a seção pelo nome * /
+         para (i = 0; i <nSections; i ++)
+             {
+             if (! strcmp (psh-> nome, szSection))
+                 {
+                 / * copiar dados para o cabeçalho * /
+                 CopyMemory ((LPVOID) sh,
+                             (LPVOID) psh,
+                             sizeof (IMAGE_SECTION_HEADER));
+                 retorno verdadeiro;
+                 }
+             outro
+                 psh ++;
+             }
+         }
+
+     retorna falso;
+ }
+
+ A função simplesmente localiza o primeiro cabeçalho da seção através do SECHDROFFSET
+ macro. Em seguida, a função faz um loop em cada seção, comparando cada seção
+ nome com o nome da seção que está procurando, até encontrar o nome correto
+ 1. Quando a seção é encontrada, a função copia os dados do
+ arquivo mapeado na memória para a estrutura passada para a função. Os campos de
+ a estrutura IMAGE_SECTION_HEADER pode ser acessada diretamente do
+ estrutura.
+
+ Campos de cabeçalho de seção
+
+    * Nome Cada cabeçalho de seção tem um campo de nome com até oito caracteres,
+      para o qual o primeiro caractere deve ser um período.
+    * PhysicalAddress ou VirtualSize. O segundo campo é um campo de união que é
+      não usado atualmente.
+    * VirtualAddress. Este campo identifica o endereço virtual no processo
+      espaço de endereçamento para o qual carregar a seção. O endereço real é criado
+      tomando o valor deste campo e adicionando-o ao ImageBase virtual
+      endereço na estrutura do cabeçalho opcional. Tenha em mente, porém, que se
+      este arquivo de imagem representa uma DLL, não há garantia de que a DLL
+      ser carregado para o local do ImageBase solicitado. Então, quando o arquivo for carregado
+      em um processo, o valor real do ImageBase deve ser verificado
+      programaticamente usando GetModuleHandle.
+    * SizeOfRawData. Este campo indica o tamanho relativo do FileAlignment do
+      corpo da seção. O tamanho real do corpo da seção será menor que ou
+      igual a um múltiplo de FileAlignment no arquivo. Depois que a imagem é carregada
+      no espaço de endereço de um processo, o tamanho do corpo da seção se torna menor
+      igual ou igual a um múltiplo de SectionAlignment.
+    * PointerToRawData. Esse é um deslocamento para o local do corpo da seção em
+      o arquivo.
+    * PointerToRelocations, PointerToLinenumbers, NumberOfRelocations,
+      NumberOfLinenumbers. Nenhum desses campos é usado no formato de arquivo PE.
+    * Características. Define as características da seção. Esses valores são
+      encontrado tanto no WINNT.H quanto na especificação Portable Executable Format
+      localizado neste CD.
+
+  Definição de Valor
+
+  Seção de código 0x00000020
+
+  0x00000040 seção de dados inicializados
+
+  0x00000080 seção de dados não inicializados
+
+  0x04000000 Seção não pode ser armazenada em cache
+
+  0x08000000 Seção não é paginável
+
+  0x10000000 Seção é compartilhada
+
+  0x20000000 seção executável
+
+  0x40000000 Seção legível
+
+  0x80000000 seção gravável
+
+ Localizando Diretórios de Dados
+
+ Os diretórios de dados existem dentro do corpo de sua seção de dados correspondente.
+ Normalmente, os diretórios de dados são a primeira estrutura dentro do corpo da seção,
+ mas não por necessidade. Por esse motivo, você precisa recuperar informações
+ tanto do cabeçalho da seção quanto do cabeçalho opcional para localizar um dado específico
+ diretório.
+
+ Para tornar este processo mais fácil, a seguinte função foi escrita para localizar o
+ diretório de dados para qualquer um dos diretórios definidos no WINNT.H:
+
+ PEFILE.C
+
+ LPVOID WINAPI ImageDirectoryOffset (
+         LPVOID lpFile,
+         DWORD dwIMAGE_DIRECTORY)
+ {
+     PIMAGE_OPTIONAL_HEADER poh;
+     PIMAGE_SECTION_HEADER psh;
+     int nSections = NumOfSections (lpFile);
+     int i = 0;
+     LPVOID VAImageDir;
+
+     / * Deve ser 0 a (NumberOfRvaAndSizes-1). * /
+     if (dwIMAGE_DIRECTORY> = poh-> NumberOfRvaAndSizes)
+         return NULL;
+
+     / * Recupere deslocamentos para cabeçalhos opcionais e de seção. * /
+     poh = (PIMAGE_OPTIONAL_HEADER) OPTHDROFFSET (lpFile);
+     psh = (PIMAGE_SECTION_HEADER) SECHDROFFSET (lpFile);
+
+     / * Localize o endereço virtual relativo do diretório de imagens. * /
+     VAImageDir = (LPVOID) poh-> DataDirectory
+                        [dwIMAGE_DIRECTORY] .VirtualAddress;
+
+     / * Localize a seção que contém o diretório da imagem. * /
+     while (i ++ <nSections)
+         {
+         if (psh-> VirtualAddress <= (DWORD) VAImageDir &&
+             psh-> VirtualAddress +
+                  psh-> SizeOfRawData> (DWORD) VAImageDir)
+             pausa;
+         psh ++;
+         }
+
+     if (i> nseções)
+         return NULL;
+
+     / * Retorna o deslocamento do diretório de importação de imagens. * /
+     return (LPVOID) (((int) lpFile +
+                      (int) VAImageDir. psh-> VirtualAddress) +
+                     (int) psh-> PointerToRawData);
+ }
+
+ A função começa validando o número de entrada do diretório de dados solicitado.
+ Em seguida, ele recupera ponteiros para o cabeçalho opcional e o cabeçalho da primeira seção.
+ A partir do cabeçalho opcional, a função determina o diretório virtual do diretório de dados
+ endereço, e ele usa esse valor para determinar dentro de qual corpo de seção os dados
+ diretório está localizado. Uma vez que o corpo da seção apropriada tenha sido identificado,
+ a localização específica do diretório de dados é encontrada traduzindo o
+ endereço virtual relativo do diretório de dados para um endereço específico no
+ Arquivo.
+
+ Seções Predefinidas
+
+ Um aplicativo para o Windows NT geralmente tem nove seções predefinidas
+ .text, .bss, .rdata, .data, .rsrc, .edata, .idata, .pdata e .debug. Alguns
+ aplicações não precisam de todas essas seções, enquanto outras podem definir
+ mais seções para atender às suas necessidades específicas. Esse comportamento é semelhante ao código
+ e segmentos de dados no MS-DOS e no Windows versão 3.1. Na verdade, a maneira como
+ aplicação define uma seção única é usando o compilador padrão
+ diretivas para nomear códigos e segmentos de dados ou usando o segmento de nome
+ opção de compilador -NT - exatamente da mesma maneira em que aplicativos definidos
+ segmentos de código e dados no Windows versão 3.1.
+
+ O seguinte é uma discussão de algumas das seções mais interessantes comuns
+ para arquivos típicos do Windows NT PE.
+
+ Seção de código executável, .text
+
+ Uma diferença entre o Windows versão 3.1 e o Windows NT é que o padrão
+ comportamento combina todos os segmentos de código (como eles são referidos na versão do Windows
+ 3.1) em uma única seção chamada ".text" no Windows NT. Desde o Windows NT usa
+ um sistema de gerenciamento de memória virtual baseado em páginas, não há vantagem
+ separando o código em segmentos de código distintos. Consequentemente, ter um grande
+ seção de código é mais fácil de gerenciar tanto para o sistema operacional quanto para o
+ Desenvolvedor de aplicativos.
+
+
+ A seção .text também contém o ponto de entrada mencionado anteriormente. O TAI também
+ vive na seção .text imediatamente antes do ponto de entrada do módulo. (O
+ A presença do IAT na seção .text faz sentido porque a tabela é realmente uma
+ série de instruções de salto, para as quais o local específico para saltar é o
+ endereço fixo.) Quando as imagens executáveis ​​do Windows NT são carregadas
+ espaço de endereçamento do processo, o IAT é corrigido com a localização de cada
+ endereço físico da função. Para encontrar o IAT na seção .text, o
+ carregador simplesmente localiza o ponto de entrada do módulo e se baseia no fato de que o
+ O TAI ocorre imediatamente antes do ponto de entrada. E já que cada entrada é a mesma
+ tamanho, é fácil andar para trás na mesa para encontrar o seu começo.
+
+ Seções de dados, .bss, .rdata, .data
+
+ A seção .bss representa dados não inicializados para o aplicativo, incluindo
+ todas as variáveis ​​declaradas como estáticas dentro de uma função ou módulo de origem.
+
+ A seção .rdata representa dados somente leitura, como strings literais,
+ constantes e informações de diretório de depuração.
+
+ Todas as outras variáveis ​​(exceto variáveis ​​automáticas, que aparecem na pilha) são
+ armazenado na seção .data. Basicamente, estes são aplicativos ou módulos globais
+ variáveis.
+
+ Seção de Recursos, .rsrc
+
+ A seção .rsrc contém informações sobre recursos para um módulo. Começa com um
+ estrutura de diretórios de recursos como a maioria das outras seções, mas os dados desta seção
+ é ainda estruturado em uma árvore de recursos. O IMAGE_RESOURCE_DIRECTORY, mostrado
+ abaixo, forma a raiz e os nós da árvore.
+
+ WINNT.H
+
+ typedef struct _IMAGE_RESOURCE_DIRECTORY {
+     ULONG Características;
+     ULONG TimeDateStamp;
+     USHORT MajorVersion;
+     USHORT MinorVersion;
+     USHORT NumberOfNamedEntries;
+     USHORT NumberOfIdEntries;
+ } IMAGE_RESOURCE_DIRECTORY, * PIMAGE_RESOURCE_DIRECTORY;
+
+ Olhando para a estrutura de diretórios, você não encontrará nenhum ponteiro para o próximo
+ nós. Em vez disso, existem dois campos, NumberOfNamedEntries e
+ NumberOfIdEntries, usado para indicar quantas entradas estão anexadas ao
+ diretório. Por anexo, quero dizer que as entradas do diretório seguem imediatamente após
+ o diretório nos dados da seção. As entradas nomeadas aparecem primeiro em ordem crescente
+ ordem alfabética, seguida pelas entradas de ID em ordem numérica crescente.
+
+ Uma entrada de diretório consiste em dois campos, conforme descrito nas seguintes
+ Estrutura de IMAGE_RESOURCE_DIRECTORY_ENTRY:
+
+ WINNT.H
+
+ typedef struct _IMAGE_RESOURCE_DIRECTORY_ENTRY {
+     Nome ULONG;
+     ULONG OffsetToData;
+ } IMAGE_RESOURCE_DIRECTORY_ENTRY, * PIMAGE_RESOURCE_DIRECTORY_ENTRY;
+
+ Os dois campos são usados ​​para coisas diferentes, dependendo do nível do
+ árvore. O campo Nome é usado para identificar um tipo de recurso, um recurso
+ nome ou ID de idioma de um recurso. O campo OffsetToData é sempre usado para
+ aponte para um irmão na árvore, um nó de diretório ou um nó de folha.
+
+ Nós de folha são o nó mais baixo na árvore de recursos. Eles definem o tamanho e
+ localização dos dados reais do recurso. Cada nó da folha é representado usando o
+ seguindo a estrutura IMAGE_RESOURCE_DATA_ENTRY:
+
+ WINNT.H
+
+ typedef struct _IMAGE_RESOURCE_DATA_ENTRY {
+     ULONG OffsetToData;
+     Tamanho ULONG;
+     ULONG CodePage;
+     ULONG Reservado;
+ } IMAGE_RESOURCE_DATA_ENTRY, * PIMAGE_RESOURCE_DATA_ENTRY;
+
+ Os dois campos OffsetToData e Size indicam a localização eo tamanho do
+ dados de recursos reais. Como essa informação é usada principalmente por funções
+ uma vez que o aplicativo foi carregado, faz mais sentido fazer o
+ OffsetToData campo um endereço virtual relativo. Este é precisamente o caso.
+ Curiosamente, todos os outros deslocamentos, como ponteiros do diretório
+ entradas para outros diretórios, são offsets em relação ao local da raiz
+ nó.
+
+ Para tornar tudo isso um pouco mais claro, considere a Figura 2.
+
+  [PEF2034C 12787 bytes]
+
+ Figura 2. Uma estrutura de árvore de recurso simples
+
+ A Figura 2 descreve uma árvore de recursos muito simples contendo apenas dois recursos
+ objetos, um menu e uma tabela de strings. Além disso, o menu e a tabela de strings
+ apenas um item cada. No entanto, você pode ver o quão complicada é a árvore de recursos
+ torna-se - mesmo com poucos recursos como este.
+
+ Na raiz da árvore, o primeiro diretório tem uma entrada para cada tipo de
+ recurso que o arquivo contém, não importa quantos de cada tipo existam. Dentro
+ Figura 2, existem duas entradas identificadas pela raiz, uma para o menu e
+ um para a tabela de strings. Se houvesse um ou mais recursos de diálogo
+ incluído no arquivo, o nó raiz teria mais uma entrada e,
+ consequentemente, outro ramo para os recursos de diálogo.
+
+ Os tipos básicos de recursos são identificados no arquivo WINUSER.H e são listados
+ abaixo:
+
+ WINUSER.H
+
+ / *
+  * Tipos de recursos predefinidos
+  * /
+ #define RT_CURSOR MAKEINTRESOURCE (1)
+ #define RT_BITMAP MAKEINTRESOURCE (2)
+ #define RT_ICON MAKEINTRESOURCE (3)
+ #define RT_MENU MAKEINTRESOURCE (4)
+ #define RT_DIALOG MAKEINTRESOURCE (5)
+ #define RT_STRING MAKEINTRESOURCE (6)
+ #define RT_FONTDIR MAKEINTRESOURCE (7)
+ #define RT_FONT MAKEINTRESOURCE (8)
+ #define RT_ACCELERATOR MAKEINTRESOURCE (9)
+ #define RT_RCDATA MAKEINTRESOURCE (10)
+ #define RT_MESSAGETABLE MAKEINTRESOURCE (11)
+
+ No nível superior da árvore, os valores de MAKEINTRESOURCE listados acima são
+ colocado no campo Nome de cada entrada de tipo, identificando os diferentes
+ recursos por tipo.
+
+ Cada uma das entradas no diretório raiz aponta para um nó irmão no
+ segundo nível da árvore. Esses nós também são diretórios, cada um tendo seus
+ próprias entradas. Nesse nível, os diretórios são usados ​​para identificar o nome do
+ cada recurso dentro de um determinado tipo. Se você tivesse vários menus definidos em sua
+ aplicação, haveria uma entrada para cada um aqui no segundo nível de
+ a árvore.
+
+ Como provavelmente já sabe, os recursos podem ser identificados por nome ou por
+ inteiro. Eles são distinguidos neste nível da árvore através do campo Nome em
+ a estrutura do diretório. Se o bit mais significativo do campo Nome estiver definido,
+ os outros 31 bits são usados ​​como um deslocamento para um IMAGE_RESOURCE_DIR_STRING_U
+ estrutura.
+
+ WINNT.H
+
+ typedef struct _IMAGE_RESOURCE_DIR_STRING_U {
+     Comprimento USHORT;
+     WCHAR NameString [1];
+ } IMAGE_RESOURCE_DIR_STRING_U, * PIMAGE_RESOURCE_DIR_STRING_U;
+
+ Essa estrutura é simplesmente um campo Comprimento de 2 bytes seguido por Comprimento UNICODE
+ personagens.
+
+ Por outro lado, se o bit mais significativo do campo Nome for claro, o
+ 31 bits inferiores são usados ​​para representar o ID inteiro do recurso. Figura 2
+ mostra o recurso de menu como um recurso nomeado e a tabela de string como um ID
+ recurso.
+
+ Se houvesse dois recursos de menu, um identificado por nome e um por recurso,
+ ambos teriam entradas imediatamente após o diretório de recursos do menu. o
+ entrada de recurso nomeado apareceria primeiro, seguido pelo número inteiro identificado
+ recurso. Os campos de diretório NumberOfNamedEntries e NumberOfIdEntries
+ cada um contém o valor 1, indicando a presença de uma entrada.
+
+ Abaixo do nível dois, a árvore de recursos não expande mais. Nível um
+ filiais em diretórios representando cada tipo de recurso e nível dois
+ ramifica em diretórios representando cada recurso por identificador. Nível três
+ mapeia uma correspondência um-para-um entre os recursos individualmente identificados
+ e seus respectivos IDs de idioma. Para indicar o ID do idioma de um recurso,
+ o campo Nome da estrutura de entrada de diretório é usado para indicar tanto
+ idioma primário e ID de sublicenciamento para o recurso. O Win32 SDK para Windows
+ O NT lista os recursos de valor padrão. Para o valor 0x0409, 0x09 representa o
+ idioma principal como LANG_ENGLISH e 0x04 é definido como SUBLANG_ENGLISH_CAN
+ para o sublinguado. O conjunto inteiro de IDs de idioma é definido no arquivo
+ WINNT.H, incluído como parte do Win32 SDK para Windows NT.
+
+ Como o nó do ID de idioma é o último nó de diretório na árvore, o
+ OffsetToData campo na estrutura de entrada é um deslocamento para um nó folha - o
+ Estrutura IMAGE_RESOURCE_DATA_ENTRY mencionada anteriormente.
+
+ Referindo-se à Figura 2, você pode ver um nó de entrada de dados para cada idioma
+ entrada de diretório. Este nó indica simplesmente o tamanho dos dados do recurso e
+ o endereço virtual relativo em que os dados do recurso estão localizados.
+
+ Uma vantagem de ter tanta estrutura na seção de dados de recursos, .rsrc,
+ é que você pode obter uma grande quantidade de informações da seção sem
+ acessando os recursos por conta própria. Por exemplo, você pode descobrir quantas
+ existem de cada tipo de recurso, que recursos - se houver - usam um determinado
+ ID do idioma, se um determinado recurso existe ou não, eo tamanho do
+ tipos individuais de recursos. Para demonstrar como fazer uso deste
+ informações, a seguinte função mostra como determinar os diferentes tipos
+ de recursos que um arquivo inclui:
+
+ PEFILE.C
+
+ int WINAPI GetListOfResourceTypes (
+     LPVOID lpFile,
+     HANDLE hHeap,
+     char ** pszResTypes)
+ {
+     PIMAGE_RESOURCE_DIRECTORY prdRoot;
+     PIMAGE_RESOURCE_DIRECTORY_ENTRY prde;
+     char * pMem;
+     int nCnt, i;
+
+     / * Obtém o diretório raiz da árvore de recursos. * /
+     if ((prdRoot = PIMAGE_RESOURCE_DIRECTORY) ImageDirectoryOffset
+            (lpFile, IMAGE_DIRECTORY_ENTRY_RESOURCE)) == NULL)
+         return 0;
+
+     / * Aloca espaço suficiente da pilha para cobrir todos os tipos. * /
+     nCnt = prdRoot-> NumberOfIdEntries * (MAXRESOURCENAME + 1);
+     * pszResTypes = (char *) HeapAlloc (hHeap,
+                                       HEAP_ZERO_MEMORY,
+                                       nCnt);
+     if ((pMem = * pszResTypes) == NULL)
+         return 0;
+
+     / * Definir ponteiro para entrada do primeiro tipo de recurso. * /
+     prde = (PIMAGE_RESOURCE_DIRECTORY_ENTRY) ((DWORD) prdRoot +
+                sizeof (IMAGE_RESOURCE_DIRECTORY));
+
+     / * Faz um loop por todos os tipos de entrada de diretório de recursos. * /
+     para (i = 0; i <prdRoot-> NumberOfIdEntries; i ++)
+         {
+         if (LoadString (hDll, nome-> nome, pMem, MAXRESOURCENAME))
+             pMem + = strlen (pMem) + 1;
+
+         prde ++;
+         }
+
+     return nCnt;
+ }
+
+ Esta função retorna uma lista de nomes de tipos de recursos na string identificada por
+ pszResTypes. Observe que, no coração dessa função, o LoadString é chamado
+ usando o campo Nome de cada entrada de diretório do tipo de recurso como o ID da cadeia. E se
+ você olha no PEFILE.RC, você verá que eu defini uma série de tipo de recurso
+ strings cujos IDs são definidos da mesma forma que os especificadores de tipo no diretório
+ entradas. Há também uma função no PEFILE.DLL que retorna o número total
+ de objetos de recurso na seção .rsrc. Seria bastante fácil expandir
+ estas funções ou escrever novas funções que extraíram outras informações de
+ esta seção.
+
+ Exportar seção de dados, .edata
+
+ A seção .edata contém dados de exportação para um aplicativo ou DLL. Quando
+ presente, esta seção contém um diretório de exportação para obter a exportação
+ em formação.
+
+ WINNT.H
+
+ typedef struct _IMAGE_EXPORT_DIRECTORY {
+     ULONG Características;
+     ULONG TimeDateStamp;
+     USHORT MajorVersion;
+     USHORT MinorVersion;
+     Nome ULONG;
+     ULONG Base;
+     ULONG NumberOfFunctions;
+     ULONG NumberOfNames;
+     PULONG * AddressOfFunctions;
+     PULONG * AddressOfNames;
+     PUSHORT * AddressOfNameOrdinals;
+ } IMAGE_EXPORT_DIRECTORY, * PIMAGE_EXPORT_DIRECTORY;
+
+ O campo Nome no diretório de exportação identifica o nome do executável
+ módulo. Os campos NumberOfFunctions e NumberOfNames indicam quantas funções
+ e nomes de função estão sendo exportados do módulo.
+
+ O campo AddressOfFunctions é um deslocamento para uma lista de entrada de função exportada
+ pontos. O campo AddressOfNames é o endereço de um deslocamento para o início
+ de uma lista separada por nulo de nomes de função exportados. AddressOfNameOrdinals é
+ um deslocamento para uma lista de valores ordinais (cada 2 bytes de comprimento) para o mesmo
+ funções.
+
+ Os três campos AddressOf ... são endereços virtuais relativos no endereço
+ espaço de um processo, uma vez que o módulo tenha sido carregado. Quando o módulo estiver carregado,
+ o endereço virtual relativo deve ser adicionado ao endereço base do módulo para obter
+ a localização exata no espaço de endereço do processo. Antes do arquivo ser
+ carregado, no entanto, o endereço pode ser determinado subtraindo a seção
+ endereço virtual do cabeçalho (VirtualAddress) do endereço do campo especificado, adicionando
+ o deslocamento do corpo da seção (PointerToRawData) para o resultado e, em seguida, usando este
+ valor como um deslocamento no arquivo de imagem. O exemplo a seguir ilustra isso
+ técnica:
+
+ PEFILE.C
+
+ int WINAPI GetExportFunctionNames (
+     LPVOID lpFile,
+     HANDLE hHeap,
+     char ** pszFunctions)
+ {
+     IMAGE_SECTION_HEADER sh;
+     PIMAGE_EXPORT_DIRECTORY ped;
+     char * pNames, * pCnt;
+     int i, nCnt;
+
+     / * Obtém o cabeçalho da seção e o ponteiro para o diretório de dados
+        para a seção .edata. * /
+     if ((ped = (PIMAGE_EXPORT_DIRECTORY) ImageDirectoryOffset
+             (lpFile, IMAGE_DIRECTORY_ENTRY_EXPORT)) == NULL)
+         return 0;
+     GetSectionHdrByName (lpFile, & sh, ".edata");
+
+     / * Determina o deslocamento dos nomes das funções de exportação. * /
+     pNames = (char *) (* (int *) ((int) ped-> AddressOfNames -
+                                (int) sh.VirtualAddress +
+                                (int) sh.PointerToRawData +
+                                (int) lpFile) -
+                       (int) sh.VirtualAddress +
+                       (int) sh.PointerToRawData +
+                       (int) lpFile);
+
+     / * Descobrir quanta memória para alocar para todas as seqüências de caracteres. * /
+     pCnt = pNames;
+     para (i = 0; i <(int) ped-> NumberOfNames; i ++)
+         while (* pCnt ++);
+     nCnt = (int) (pCnt. pNames);
+
+     / * Alocar memória fora da pilha para nomes de função. * /
+     * pszFunctions = HeapAlloc (hHeap, HEAP_ZERO_MEMORY, nCnt);
+
+     / * Copie todas as strings para o buffer. * /
+     CopiarMemory ((LPVOID) * pszFunctions, (LPVOID) pNames, nCnt);
+
+     return nCnt;
+ }
+
+ Observe que nesta função a variável pNames é atribuída determinando
+ primeiro o endereço do deslocamento e, em seguida, o local de deslocamento real. Tanto o
+ endereço do deslocamento e o deslocamento em si são endereços virtuais relativos e
+ deve ser traduzido antes de ser usado, como a função demonstra. Você poderia
+ escrever uma função semelhante para determinar os valores ordinais ou pontos de entrada do
+ funções, mas por que se incomodar quando eu já fiz isso por você? o
+ GetNumberOfExportedFunctions, GetExportFunctionEntryPoints e
+ Funções GetExportFunctionOrdinals também existem no PEFILE.DLL.
+
+ Importar seção de dados, .idata
+
+ A seção .idata é dados de importação, incluindo o diretório de importação e importação
+ tabela de nomes de endereços. Embora um diretório IMAGE_DIRECTORY_ENTRY_IMPORT seja
+ definida, nenhuma estrutura de diretório de importação correspondente é incluída no arquivo
+ WINNT.H. Em vez disso, existem várias outras estruturas chamadas
+ IMAGE_IMPORT_BY_NAME, IMAGE_THUNK_DATA e IMAGE_IMPORT_DESCRIPTOR.
+ Pessoalmente, eu não poderia fazer cara ou coroa de como essas estruturas são supostas
+ para correlacionar com a seção .idata, então eu passei várias horas decifrando o
+ .idata corpo seção e surgiu com uma estrutura muito mais simples. Eu nomeei isso
+ estrutura IMAGE_IMPORT_MODULE_DIRECTORY.
+
+ PEFILE.H
+
+ typedef struct tagImportDirectory
+     {
+     DWORD dwRVAFunctionNameList;
+     DWORD dwUseless1;
+     DWORD dwUseless2;
+     DWORD dwRVAModuleName;
+     DWORD dwRVAFunctionAddressList;
+     } IMAGE_IMPORT_MODULE_DIRECTORY,
+      * PIMAGE_IMPORT_MODULE_DIRECTORY;
+
+ Ao contrário dos diretórios de dados de outras seções, este repete um após
+ outro para cada módulo importado no arquivo. Pense nisso como uma entrada em uma lista
+ de diretórios de dados do módulo, em vez de um diretório de dados para a seção inteira
+ De dados. Cada entrada é um diretório para as informações de importação para um
+ módulo.
+
+ Um dos campos na estrutura IMAGE_IMPORT_MODULE_DIRECTORY é
+ dwRVAModuleName, um endereço virtual relativo que aponta para o nome do módulo.
+ Existem também dois parâmetros dwUseless na estrutura que servem como preenchimento
+ para manter a estrutura alinhada corretamente dentro da seção. O formato de arquivo PE
+ especificação menciona algo sobre bandeiras de importação, um carimbo de hora / data e
+ versões maior / menor, mas esses dois campos permaneceram vazios ao longo do meu
+ experimentação, então eu ainda os considero inúteis.
+
+ Com base na definição dessa estrutura, você pode recuperar os nomes dos
+ módulos e todas as funções em cada módulo que são importados por um executável
+ Arquivo. A seguinte função demonstra como recuperar todos os nomes dos módulos
+ importado por um arquivo PE particular:
+
+ PEFILE.C
+
+ int WINAPI GetImportModuleNames (
+     LPVOID lpFile,
+     HANDLE hHeap,
+     char ** pszModules)
+ {
+     PIMAGE_IMPORT_MODULE_DIRECTORY pid;
+     IMAGE_SECTION_HEADER idsh;
+     BYTE * pData;
+     int nCnt = 0, nSize = 0, i;
+     char * pModule [1024];
+     char * psz;
+
+     pid = (PIMAGE_IMPORT_MODULE_DIRECTORY) ImageDirectoryOffset
+              (lpFile, IMAGE_DIRECTORY_ENTRY_IMPORT);
+     pData = (BYTE *) pid;
+
+     / * Localize o cabeçalho da seção ".idata". * /
+     if (! GetSectionHdrByName (lpFile, & idsh, ".idata"))
+         return 0;
+
+     / * Extrai todos os módulos de importação. * /
+     while (pid-> dwRVAModuleName)
+         {
+         / * Alocar buffer para deslocamentos de seqüência de caracteres absolutos. * /
+         pModule [nCnt] = (char *) (pData +
+                (pid-> dwRVAModuleName-idsh.VirtualAddress));
+         nSize + = strlen (pMódulo [nCnt]) + 1;
+
+         / * Incrementar para a próxima entrada do diretório de importação. * /
+         pid ++;
+         nCnt ++;
+         }
+
+     / * Copie todas as seqüências de caracteres para um bloco de memória heap. * /
+     * pszModules = HeapAlloc (hHeap, HEAP_ZERO_MEMORY, nSize);
+     psz = * pszModules;
+     para (i = 0; i <nCnt; i ++)
+         {
+         strcpy (psz, pMódulo [i]);
+         psz + = strlen (psz) + 1;
+         }
+
+     return nCnt;
+ }
+
+ A função é bem direta. No entanto, uma coisa vale a pena apontar
+ out - observe o loop while. Esse loop é finalizado quando pid-> dwRVAModuleName
+ é 0. Implícito aqui é que no final da lista de
+ IMAGE_IMPORT_MODULE_DIRECTORY estruturas é uma estrutura nula que tem um valor
+ de 0 para pelo menos o campo dwRVAModuleName. Esse é o comportamento que observei em
+ minha experimentação com o arquivo e depois confirmada no formato de arquivo PE
+ especificação.
+
+ O primeiro campo na estrutura, dwRVAFunctionNameList, é um virtual relativo
+ endereço para uma lista de endereços virtuais relativos que apontam para a função
+ nomes dentro do arquivo. Como mostrado nos dados a seguir, o módulo e a função
+ os nomes de todos os módulos importados são listados nos dados da seção .idata:
+
+ E6A7 0000 F6A7 0000 08A8 0000 1AA8 0000 ................
+ 28A8 0000 3CA8 0000 4CA8 0000 0000 0000 (... <... L .......
+ 0000 4765 744F 7065 6E46 696C 654E 616D .. GetOpenFileNam
+ 6541 0000 636F 6D64 6C67 3332 2E64 6C6C eA..comdlg32.dll
+ 0000 2500 4372 6561 7465 466F 6E74 496E ..%. CreateFontIn
+ 6469 7265 6374 4100 4744 4933 322E 646C directA.GDI32.dl
+ 6C00 A000 4765 7444 6576 6963 6543 6170 l ... GetDeviceCap
+ 7300 C600 4765 7453 746F 636B 4F62 6A65 s ... GetStockObje
+ 6374 0000 D500 4765 7454 6578 744D 6574 ct .... GetTextMet
+ 7269 6373 4100 1001 5365 6C65 6374 4F62 ricsA ... SelectOb
+ 6A65 6374 0000 1601 5365 7442 6B43 6F6C ject .... SetBkCol
+ 6F72 0000 3501 5365 7454 6578 7443 6F6C ou..5.SetTextCol
+ 6F72 0000 4501 5465 7874 4F75 7441 0000 ou..E.TextOutA ..
+
+ Os dados acima são uma parte da seção .idata do EXEVIEW.EXE
+ exemplo de aplicativo. Esta seção particular representa o começo da
+ lista de nomes de módulos e funções de importação. Se você começar a examinar o direito
+ seção parte dos dados, você deve reconhecer os nomes da familiar API Win32
+ funções e os nomes dos módulos em que são encontrados. Leitura de cima para baixo,
+ você obtém GetOpenFileNameA, seguido pelo nome do módulo COMDLG32.DLL. Em breve
+ depois disso, você obtém CreateFontIndirectA, seguido pelo módulo GDI32.DLL e
+ em seguida, as funções GetDeviceCaps, GetStockObject, GetTextMetrics e assim por diante.
+
+ Esse padrão se repete em toda a seção .idata. O primeiro nome do módulo é
+ COMDLG32.DLL e o segundo é GDI32.DLL. Observe que apenas uma função é
+ importados do primeiro módulo, enquanto muitas funções são importadas do
+ segundo módulo. Em ambos os casos, os nomes das funções e o nome do módulo ao qual
+ eles pertencem são ordenados de tal forma que um nome de função aparece em primeiro lugar, seguido por
+ o nome do módulo e, em seguida, pelo resto dos nomes das funções, se houver.
+
+ A seguinte função demonstra como recuperar os nomes das funções de um
+ módulo específico:
+
+ PEFILE.C
+
+ int WINAPI GetImportFunctionNamesByModule (
+     LPVOID lpFile,
+     HANDLE hHeap,
+     char * pszModule,
+     char ** pszFunctions)
+ {
+     PIMAGE_IMPORT_MODULE_DIRECTORY pid;
+     IMAGE_SECTION_HEADER idsh;
+     DWORD dwBase;
+     int nCnt = 0, nSize = 0;
+     DWORD dwFunction;
+     char * psz;
+
+     / * Localize o cabeçalho da seção ".idata". * /
+     if (! GetSectionHdrByName (lpFile, & idsh, ".idata"))
+         return 0;
+
+     pid = (PIMAGE_IMPORT_MODULE_DIRECTORY) ImageDirectoryOffset
+              (lpFile, IMAGE_DIRECTORY_ENTRY_IMPORT);
+
+     dwBase = ((DWORD) pid. idsh.VirtualAddress);
+
+     / * Encontre o pid do módulo. * /
+     while (pid-> dwRVAModuleName &&
+            strcmp (pszModule,
+                   (char *) (pid-> dwRVAModuleName + dwBase)))
+         pid ++;
+
+     / * Sair se o módulo não for encontrado. * /
+     if (! pid-> dwRVAModuleName)
+         return 0;
+
+     / * Número de contagem de nomes de função e comprimento de seqüências de caracteres. * /
+     dwFunction = pid-> dwRVAFunctionNameList;
+     while (dwFunction &&
+            * (DWORD *) (dwFunction + dwBase) &&
+            * (char *) ((* (DWORD *) (dwFunction + dwBase)) +
+             dwBase + 2))
+         {
+         nSize + = strlen ((char *) ((* (DWORD *) (dwFuncao +)
+              dwBase)) + dwBase + 2)) + 1;
+         dwFunction + = 4;
+         nCnt ++;
+         }
+
+     / * Alocar memória fora da pilha para nomes de função. * /
+     * pszFunctions = HeapAlloc (hHeap, HEAP_ZERO_MEMORY, nSize);
+     psz = * pszFunctions;
+
+     / * Copie os nomes das funções para o ponteiro da memória. * /
+     dwFunction = pid-> dwRVAFunctionNameList;
+     while (dwFunction &&
+            * (DWORD *) (dwFunction + dwBase) &&
+            * ((char *) ((* (DWORD *) (dwFunction + dwBase)) +
+             dwBase + 2)))
+         {
+         strcpy (psz, (char *) ((* (DWORD *) (funão + dwBase)) +
+                 dwBase + 2));
+         psz + = strlen ((char *) ((* (DWORD *) (dwFunção + dwBase)) +
+                 dwBase + 2)) + 1;
+         dwFunction + = 4;
+         }
+
+     return nCnt;
+ }
+
+ Como a função GetImportModuleNames, essa função depende do final de cada
+ lista de informações para ter uma entrada zerada. Neste caso, a lista de funções
+ nomes termina com um que é zero.
+
+ O campo final, dwRVAFunctionAddressList, é um endereço virtual relativo a um
+ lista de endereços virtuais que serão colocados nos dados da seção pelo carregador
+ quando o arquivo é carregado. Antes que o arquivo seja carregado, no entanto, esses
+ endereços são substituídos por endereços virtuais relativos que correspondem exatamente
+ a lista de nomes de funções. Então, antes que o arquivo seja carregado, há dois
+ listas idênticas de endereços virtuais relativos apontando para a função importada
+ nomes.
+
+ Seção de informações de depuração, .debug
+
+ Informações de depuração são inicialmente colocadas na seção .debug. O formato de arquivo PE
+ também suporta arquivos de depuração separados (normalmente identificados com uma extensão .DBG)
+ como meio de coletar informações de depuração em um local central. O debug
+ contém as informações de depuração, mas os diretórios de depuração residem no
+ Seção .rdata mencionada anteriormente. Cada uma dessas referências de diretórios depura
+ informações na seção .debug. A estrutura do diretório de depuração é definida como
+ um IMAGE_DEBUG_DIRECTORY, da seguinte maneira:
+
+ WINNT.H
+
+ typedef struct _IMAGE_DEBUG_DIRECTORY {
+     ULONG Características;
+     ULONG TimeDateStamp;
+     USHORT MajorVersion;
+     USHORT MinorVersion;
+     Tipo ULONG;
+     ULONG SizeOfData;
+     ULONG AddressOfRawData;
+     ULONG PointerToRawData;
+ } IMAGE_DEBUG_DIRECTORY, * PIMAGE_DEBUG_DIRECTORY;
+
+ A seção é dividida em partes separadas de dados representando diferentes
+ tipos de informações de depuração. Para cada um existe um diretório de debug descrito
+ acima. Os diferentes tipos de informações de depuração estão listados abaixo:
+
+ WINNT.H
+
+ #define IMAGE_DEBUG_TYPE_UNKNOWN 0
+ #define IMAGE_DEBUG_TYPE_COFF 1
+ #define IMAGE_DEBUG_TYPE_CODEVIEW 2
+ #define IMAGE_DEBUG_TYPE_FPO 3
+ #define IMAGE_DEBUG_TYPE_MISC 4
+
+ O campo Tipo em cada diretório indica qual tipo de informação de depuração
+ diretório representa. Como você pode ver na lista acima, o formato de arquivo PE
+ suporta muitos tipos diferentes de informações de depuração, bem como
+ campos informativos. Dessas, as informações de IMAGE_DEBUG_TYPE_MISC são
+ único. Esta informação foi adicionada para representar diversas informações sobre
+ a imagem executável que não pôde ser adicionada a nenhum dos dados mais estruturados
+ seções no formato de arquivo PE. Este é o único local no arquivo de imagem
+ onde o nome da imagem com certeza aparecerá. Se uma imagem exportar informações, o
+ A seção de dados de exportação também incluirá o nome da imagem.
+
+ Cada tipo de informação de depuração tem sua própria estrutura de cabeçalho que define
+ dados. Cada um deles está listado no arquivo WINNT.H. Uma coisa legal sobre o
+ A estrutura IMAGE_DEBUG_DIRECTORY é que ela inclui dois campos que identificam
+ as informações de depuração. O primeiro deles, AddressOfRawData, é o parente
+ endereço virtual dos dados depois que o arquivo é carregado. O outro,
+ PointerToRawData, é um deslocamento real dentro do arquivo PE, onde os dados são
+ localizado. Isso facilita a localização de informações específicas de depuração.
+
+ Como último exemplo, considere a seguinte função, que extrai a imagem
+ nome da estrutura IMAGE_DEBUG_MISC:
+
+ PEFILE.C
+
+ int WINAPI RetrieveModuleName (
+     LPVOID lpFile,
+     HANDLE hHeap,
+     char ** pszModule)
+ {
+
+     PIMAGE_DEBUG_DIRECTORY pdd;
+     PIMAGE_DEBUG_MISC pdm = NULL;
+     int nCnt;
+
+     if (! (pdd = (PIMAGE_DEBUG_DIRECTORY) ImageDirectoryOffset
+                (lpFile, IMAGE_DIRECTORY_ENTRY_DEBUG)))
+         return 0;
+
+     while (pdd-> SizeOfData)
+         {
+         if (pdd-> Type == IMAGE_DEBUG_TYPE_MISC)
+             {
+             pdm = (PIMAGE_DEBUG_MISC)
+                 ((DWORD) pdd-> PointerToRawData + (DWORD) lpFile);
+
+             nCnt = lstrlen (pdm-> Data) * (pdm-> Unicode? 2: 1);
+             * pszModule = (char *) HeapAlloc (hHeap,
+                                             HEAP_ZERO_MEMORY,
+                                             nCnt + 1;
+             CopyMemory (* pszModule, pdm-> Data, nCnt);
+
+             pausa;
+             }
+
+         pdd ++;
+         }
+
+     if (pdm! = NULL)
+         return nCnt;
+     outro
+         return 0;
+ }
+
+ Como você pode ver, a estrutura do diretório de depuração torna relativamente fácil
+ para localizar um tipo específico de informações de depuração. Uma vez o IMAGE_DEBUG_MISC
+ estrutura está localizada, extrair o nome da imagem é tão simples quanto invocar
+ Função CopyMemory.
+
+ Como mencionado acima, as informações de depuração podem ser separadas em arquivos .DBG separados.
+ O SDK do Windows NT inclui um utilitário chamado REBASE.EXE que atende
+ propósito. Por exemplo, na seguinte declaração, uma imagem executável chamada
+ TEST.EXE está sendo removido de informações de depuração:
+
+ rebase -b 40000 -xc: \ samples \ testdir test.exe
+
+ As informações de depuração são colocadas em um novo arquivo chamado TEST.DBG e localizado em
+ o caminho especificado, neste caso, c: \ samples \ testdir. O arquivo começa com um
+ estrutura única IMAGE_SEPARATE_DEBUG_HEADER, seguida por uma cópia da seção
+ cabeçalhos existentes na imagem executável removida. Então a seção .debug
+ os dados seguem os cabeçalhos da seção. Então, logo após os cabeçalhos da seção são os
+ série de estruturas IMAGE_DEBUG_DIRECTORY e seus dados associados. O debug
+ a própria informação retém a mesma estrutura descrita acima para
+ informações de depuração do arquivo de imagem.
+
+ Resumo do formato de arquivo PE
+
+ O formato de arquivo PE para Windows NT introduz uma estrutura completamente nova para
+ desenvolvedores familiarizados com os ambientes Windows e MS-DOS. Ainda desenvolvedores
+ familiarizado com o ambiente UNIX vai achar que o formato de arquivo PE é semelhante
+ para, se não for baseado na especificação COFF.
+
+ Todo o formato consiste em um cabeçalho MS-DOS MZ, seguido por um stub de modo real
+ programa, a assinatura do arquivo PE, o cabeçalho do arquivo PE, o cabeçalho opcional PE, todos
+ dos cabeçalhos de seção e, finalmente, todos os corpos de seção.
+
+ O cabeçalho opcional termina com uma matriz de entradas de diretório de dados
+ endereços virtuais relativos aos diretórios de dados contidos nos corpos de seção.
+ Cada diretório de dados indica como os dados de um corpo de seção específico são estruturados.
+
+ O formato de arquivo PE possui onze seções predefinidas, como é comum em aplicativos
+ para Windows NT, mas cada aplicativo pode definir suas próprias seções exclusivas para
+ código e dados.
+
+ A seção pré-definida .debug também tem a capacidade de ser removida de
+ o arquivo em um arquivo de depuração separado. Se assim for, um cabeçalho de depuração especial é usado para
+ analisar o arquivo de depuração, e um sinalizador é especificado no cabeçalho do arquivo PE para indicar
+ que os dados de depuração foram removidos.
+
+ Descrições da Função PEFILE.DLL
+
+ PEFILE.DLL consiste principalmente de funções que recuperam um deslocamento em um
+ dado arquivo PE ou copiar uma parte dos dados do arquivo para uma estrutura específica. Cada
+ função tem um único requisito - o primeiro parâmetro é um ponteiro para o
+ início do arquivo PE. Ou seja, o arquivo deve primeiro ser mapeado na memória
+ o espaço de endereço do seu processo, e o local base do mapeamento de arquivo é
+ o valor lpFile que você passa como o primeiro parâmetro para cada função.
+
+ Os nomes das funções devem ser auto-explicativos, e cada função é
+ listado com um breve comentário descrevendo sua finalidade. Se, depois de ler
+ a lista de funções, você não pode determinar para que serve uma função, consulte
+ o aplicativo de exemplo EXEVIEW.EXE para encontrar um exemplo de como a função é
+ usava. A seguinte lista de protótipos de função também pode ser encontrada em PEFILE.H:
+
+ PEFILE.H
+
+ / * Recupere um deslocamento de ponteiro para o cabeçalho MS-DOS MZ. * /
+ BOOL WINAPI GetDosHeader (LPVOID, PIMAGE_DOS_HEADER);
+
+ / * Determine o tipo de um arquivo .exe. * /
+ DWORD WINAPI ImageFileType (LPVOID);
+
+ / * Recupera um deslocamento de ponteiro para o cabeçalho do arquivo PE. * /
+ BOOL WINAPI GetPEFileHeader (LPVOID, PIMAGE_FILE_HEADER);
+
+ / * Recupera um deslocamento de ponteiro para o cabeçalho opcional do PE. * /
+ BOOL WINAPI GetPEOptionalHeader (LPVOID,
+                                   PIMAGE_OPTIONAL_HEADER);
+
+ / * Retorna o endereço do ponto de entrada do módulo. * /
+ LPVOID WINAPI GetModuleEntryPoint (LPVOID);
+
+ / * Retorna uma contagem do número de seções no arquivo. * /
+ int WINAPI NumOfSections (LPVOID);
+
+ / * Retorna o endereço base desejado do executável quando
+    Ele é carregado no espaço de endereço de um processo. * /
+ LPVOID WINAPI GetImageBase (LPVOID);
+
+ / * Determine o local dentro do arquivo de um determinado
+    diretório de dados de imagem. * /
+ LPVOID WINAPI ImageDirectoryOffset (LPVOID, DWORD);
+
+ / * Função recupera nomes de todas as seções no arquivo. * /
+ int WINAPI GetSectionNames (LPVOID, HANDLE, char **);
+
+ / * Copie as informações do cabeçalho da seção para uma seção específica. * /
+ BOOL WINAPI GetSectionHdrByName (LPVOID,
+                                   PIMAGE_SECTION_HEADER, char *);
+
+ / * Obter lista separada por núm de nomes de módulos de importação. * /
+ int WINAPI GetImportModuleNames (LPVOID, HANDLE, char **);
+
+ / * Obter lista de funções de importação separadas por nulo para um módulo. * /
+ int WINAPI GetImportFunctionNamesByModule (LPVOID, HANDLE,
+                                            char *, char **);
+
+ / * Obter lista separada por NULL de nomes de função exportados. * /
+ int WINAPI GetExportFunctionNames (LPVOID, HANDLE, char **);
+
+ / * Obtém o número de funções exportadas. * /
+ int WINAPI GetNumberOfExportedFunctions (LPVOID);
+
+ / * Obter lista de pontos de entrada de endereço virtual de função exportados. * /
+ LPVOID WINAPI GetExportFunctionEntryPoints (LPVOID);
+
+ / * Obter lista de valores ordinais de função exportados. * /
+ LPVOID WINAPI GetExportFunctionOrdinals (LPVOID);
+
+ / * Determinar o número total de objetos de recursos. * /
+ int WINAPI GetNumberOfResources (LPVOID);
+
+ / * Lista de retorno de todos os tipos de objetos de recursos usados ​​no arquivo. * /
+ int WINAPI GetListOfResourceTypes (LPVOID, HANDLE, char **);
+
+ / * Determine se as informações de depuração foram removidas do arquivo. * /
+ BOOL WINAPI IsDebugInfoStripped (LPVOID);
+
+ / * Obtém o nome do arquivo de imagem. * /
+ int WINAPI RetrieveModuleName (LPVOID, HANDLE, char **);
+
+ / * Função determina se o arquivo é um arquivo de depuração válido. * /
+ BOOL WINAPI IsDebugFile (LPVOID);
+
+ / * Função retorna o cabeçalho de depuração do arquivo de depuração. * /
+ BOOL WINAPI GetSeparateDebugHeader (LPVOID,
+                                    PIMAGE_SEPARATE_DEBUG_HEADER);
+
+ Além das funções listadas acima, as macros mencionadas anteriormente neste
+ artigo também são definidos no arquivo PEFILE.H. A lista completa é a seguinte:
+
+ / * Deslocamento para assinatura de arquivo PE * /
+ #define NTSIGNATURE (a) ((LPVOID) ((BYTE *) a + \
+                         ((PIMAGE_DOS_HEADER) a) -> e_lfanew))
+
+ / * O cabeçalho MS-OS identifica o dword de assinatura do NT PEFile;
+    o cabeçalho PEFILE existe logo após esse dword. * /
+ #define PEFHDROFFSET (a) ((LPVOID) ((BYTE *) a + \
+                          ((PIMAGE_DOS_HEADER) a) -> e_lfanew + \
+                              SIZE_OF_NT_SIGNATURE))
+
+ / * O cabeçalho opcional PE é imediatamente após o cabeçalho PEFile. * /
+ #define OPTHDROFFSET (a) ((LPVOID) ((BYTE *) a + \
+                          ((PIMAGE_DOS_HEADER) a) -> e_lfanew + \
+                            SIZE_OF_NT_SIGNATURE + \
+                            sizeof (IMAGE_FILE_HEADER)))
+
+ / * Os cabeçalhos de seção são imediatamente após o cabeçalho opcional do PE. * /
+ #define SECHDROFFSET (a) ((LPVOID) ((BYTE *) a + \
+                          ((PIMAGE_DOS_HEADER) a) -> e_lfanew + \
+                            SIZE_OF_NT_SIGNATURE + \
+                            sizeof (IMAGE_FILE_HEADER) + \
+                            sizeof (IMAGE_OPTIONAL_HEADER)))
+
+ Para usar o PEFILE.DLL, simplesmente inclua o arquivo de cabeçalho PEFILE.H e vincule a DLL a
+ sua aplicação. Todas as funções são mutuamente exclusivas, mas
+ alguns foram escritos tanto para apoiar os outros quanto para as informações que
+ providenciar. Por exemplo, a função GetSectionNames é útil para obter o
+ nomes exatos de todas as seções. No entanto, para poder recuperar o cabeçalho da seção para
+ um nome de seção exclusivo (um definido pelo desenvolvedor do aplicativo durante
+ compile), você primeiro teria que obter a lista de nomes e, em seguida, chamar o
+ function GetSectionHeaderByName com o nome exato da seção. Apreciar!
+
+ 1997 Microsoft Corporation. Todos os direitos reservados. Noticias legais
+
